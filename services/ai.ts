@@ -28,8 +28,8 @@ export interface QualityAnalysisResult {
   isHalal: boolean;
   halalScore: number;
   halalReasoning: string;
-  reasoning: string; 
-  shelfLifePrediction: string; 
+  reasoning: string;
+  shelfLifePrediction: string;
   hygieneScore: number;
   qualityPercentage: number;
   detectedItems: DetectedItem[];
@@ -39,8 +39,8 @@ export interface QualityAnalysisResult {
 }
 
 const getAI = () => {
-  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-  console.log("%c[AI SERVICE] Using API Key:", "color: orange; font-weight: bold;", apiKey ? "DETECTED (Starts with " + apiKey.substring(0, 6) + ")" : "NOT FOUND");
+  // Gunakan import.meta.env untuk Vite
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
   return new GoogleGenAI({ apiKey: apiKey || '', apiVersion: 'v1' });
 };
 
@@ -65,15 +65,15 @@ const SOCIAL_FACTORS: Record<string, number> = {
 };
 
 const calculateDetailedImpact = (
-  detectedItems: DetectedItem[], 
-  totalWeightGram: number, 
+  detectedItems: DetectedItem[],
+  totalWeightGram: number,
   packagingType: string,
   portionCount: number = 1
 ): DetailedSocialImpact => {
   // Hitung berat rata-rata per porsi (dalam KG)
   const totalWeightKg = totalWeightGram / 1000;
   const weightPerPortionKg = totalWeightKg / (portionCount || 1);
-  
+
   // 1. Estimasi Distribusi Berat per item dalam 1 porsi
   const weightRatios: Record<string, number> = {
     'Karbohidrat': 4,
@@ -94,19 +94,19 @@ const calculateDetailedImpact = (
   // 2. Hitung Breakdown CO2 & Social (UNTUK 1 PORSI)
   const co2Breakdown: ImpactBreakdownItem[] = [];
   const socialBreakdown: ImpactBreakdownItem[] = [];
-  
+
   let totalCo2PerPortion = 0;
   let totalPointsPerPortion = 0;
 
   itemsWithRatio.forEach(item => {
     // Berat item ini dalam 1 porsi
     const itemWeightPerPortion = parseFloat(((item.ratio / totalRatioPoints) * weightPerPortionKg).toFixed(3));
-    
+
     // CO2 Calculation per Porsi
     const co2Factor = EMISSION_FACTORS[item.category] || 0.5;
     const co2Val = parseFloat((itemWeightPerPortion * co2Factor).toFixed(2));
     totalCo2PerPortion += co2Val;
-    
+
     co2Breakdown.push({
       name: `${item.name} (${item.category})`,
       category: item.category,
@@ -117,7 +117,7 @@ const calculateDetailedImpact = (
 
     // Social Points Calculation per Porsi
     const socialFactor = SOCIAL_FACTORS[item.category] || 10;
-    const pointsVal = Math.round(itemWeightPerPortion * socialFactor * 10); 
+    const pointsVal = Math.round(itemWeightPerPortion * socialFactor * 10);
     totalPointsPerPortion += pointsVal;
 
     socialBreakdown.push({
@@ -142,7 +142,7 @@ const calculateDetailedImpact = (
   const grandTotalPoints = Math.round(totalPointsPerPortion * portionCount);
 
   // Water & Land based on total CO2 proxy (simplified)
-  const waterSaved = Math.round(grandTotalCo2 * 200); 
+  const waterSaved = Math.round(grandTotalCo2 * 200);
   const landSaved = parseFloat((grandTotalCo2 * 0.5).toFixed(1));
 
   return {
@@ -161,7 +161,7 @@ const calculateDetailedImpact = (
 };
 
 export const analyzeFoodQuality = async (
-  inputLabels: string[], 
+  inputLabels: string[],
   imageBase64?: string,
   context?: {
     foodName: string;
@@ -176,15 +176,15 @@ export const analyzeFoodQuality = async (
 ): Promise<QualityAnalysisResult> => {
   try {
     const ai = getAI();
-    
+
     // Log daftar model yang TERSEDIA untuk API Key Anda
     try {
-        const result = await ai.models.list();
-        // Mengambil nama model dari hasil list
-        const modelNames = (result as any).pageInternal?.map((m: any) => m.name) || [];
-        console.log("%c[AI SERVICE] Model yang bisa Anda gunakan:", "color: cyan; font-weight: bold;", modelNames);
+      const result = await ai.models.list();
+      // Mengambil nama model dari hasil list
+      const modelNames = (result as any).pageInternal?.map((m: any) => m.name) || [];
+      console.log("%c[AI SERVICE] Model yang bisa Anda gunakan:", "color: cyan; font-weight: bold;", modelNames);
     } catch (e) {
-        console.log("[AI SERVICE] Gagal melist model, lanjut ke analisis...");
+      console.log("[AI SERVICE] Gagal melist model, lanjut ke analisis...");
     }
 
     const parts: any[] = [];
@@ -231,77 +231,79 @@ export const analyzeFoodQuality = async (
       }
     `;
 
-    const schema = {
-      type: "OBJECT",
-      properties: {
-        isSafe: { type: "BOOLEAN" },
-        isHalal: { type: "BOOLEAN" },
-        halalScore: { type: "INTEGER" },
-        reasoning: { type: "STRING" },
-        hygieneScore: { type: "INTEGER" },
-        qualityPercentage: { type: "INTEGER" },
-        detectedItems: {
-          type: "ARRAY",
-          items: {
-            type: "OBJECT",
-            properties: {
-              name: { type: "STRING" },
-              category: { type: "STRING" }
-            },
-            required: ["name", "category"]
-          }
+// services/ai.ts
+
+const schema = {
+  type: Type.OBJECT, // Gunakan enum Type, bukan string "OBJECT"
+  properties: {
+    isSafe: { type: Type.BOOLEAN },
+    isHalal: { type: Type.BOOLEAN },
+    halalScore: { type: Type.INTEGER },
+    reasoning: { type: Type.STRING },
+    hygieneScore: { type: Type.INTEGER },
+    qualityPercentage: { type: Type.INTEGER },
+    detectedItems: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          category: { type: Type.STRING }
         },
-        shelfLifePrediction: { type: "STRING" },
-        storageTips: { type: "ARRAY", items: { type: "STRING" } }
-      },
-      required: ["isSafe", "qualityPercentage", "detectedItems"]
-    };
+        required: ["name", "category"]
+      }
+    },
+    shelfLifePrediction: { type: Type.STRING },
+    storageTips: { type: Type.ARRAY, items: { type: Type.STRING } }
+  },
+  required: ["isSafe", "qualityPercentage", "detectedItems"]
+};
 
     const response = await ai.models.generateContent({
       model: 'gemini-1.5-flash', // Model paling stabil di v1
       contents: [
-          {
-              role: 'user',
-              parts: [{ text: prompt }, ...parts]
-          }
+        {
+          role: 'user',
+          parts: [{ text: prompt }, ...parts]
+        }
       ],
-      config: { 
-        responseMimeType: "application/json", 
-        responseSchema: schema as any 
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema as any
       }
     });
 
     const aiResult = JSON.parse(response.text || '{}');
-    
+
     // Kalkulasi Dampak Mendetail (Updated Logic)
     const socialImpact = calculateDetailedImpact(
-        aiResult.detectedItems || [], 
-        context?.weightGram || 500, 
-        context?.packagingType || 'plastic',
-        context?.quantityCount || 1 // Pass quantity count
+      aiResult.detectedItems || [],
+      context?.weightGram || 500,
+      context?.packagingType || 'plastic',
+      context?.quantityCount || 1 // Pass quantity count
     );
 
-    return { 
-        ...aiResult, 
-        detectedCategory: aiResult.detectedItems?.[0]?.category || 'Lainnya',
-        socialImpact 
+    return {
+      ...aiResult,
+      detectedCategory: aiResult.detectedItems?.[0]?.category || 'Lainnya',
+      socialImpact
     };
   } catch (error: any) {
     console.error("AI Analysis Error:", error);
     // Fallback Result
     const fallbackItems: DetectedItem[] = [{ name: context?.foodName || "Makanan", category: "Lainnya" }];
     const fallbackImpact = calculateDetailedImpact(
-        fallbackItems, 
-        context?.weightGram || 500, 
-        'plastic', 
-        context?.quantityCount || 1
+      fallbackItems,
+      context?.weightGram || 500,
+      'plastic',
+      context?.quantityCount || 1
     );
-    
+
     return {
-        isSafe: true, isHalal: true, halalScore: 80, halalReasoning: "Fallback analysis", reasoning: "Analisis AI terkendala, menggunakan estimasi standar.", 
-        shelfLifePrediction: "4 Jam", hygieneScore: 80, qualityPercentage: 80, 
-        detectedItems: fallbackItems, detectedCategory: 'Lainnya', storageTips: ["Simpan di tempat kering"],
-        socialImpact: fallbackImpact
+      isSafe: true, isHalal: true, halalScore: 80, halalReasoning: "Fallback analysis", reasoning: "Analisis AI terkendala, menggunakan estimasi standar.",
+      shelfLifePrediction: "4 Jam", hygieneScore: 80, qualityPercentage: 80,
+      detectedItems: fallbackItems, detectedCategory: 'Lainnya', storageTips: ["Simpan di tempat kering"],
+      socialImpact: fallbackImpact
     };
   }
 };
