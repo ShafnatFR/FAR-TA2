@@ -41,7 +41,8 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate, stats, claims = 
   ];
 
   // Helper date parser
-  const parseDate = (dateStr: string): Date => {
+  const parseDate = (dateStr?: string): Date => {
+      if (!dateStr) return new Date(); // Fallback if undefined/missing
       // Handle "dd/mm/yyyy" or ISO strings
       if (dateStr.includes('/')) {
           const parts = dateStr.split('/');
@@ -82,12 +83,12 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate, stats, claims = 
                   color: c.status === 'completed' ? "bg-blue-100 text-blue-600" : "bg-green-100 text-green-600"
               });
           }
-          if (c.isReported) {
+          if (c.isReported && c.reportId) { // Ensure report actually exists (not deleted from DB)
               activities.push({
-                  id: `report-${c.id}`,
+                  id: `report-${c.reportId}`,
                   text: `Laporan: ${c.reportReason || 'Masalah'}`,
                   desc: `Pada pesanan ${c.foodName}`,
-                  date: parseDate(c.date), // Use claim date as proxy if report date missing
+                  date: parseDate(c.date),
                   icon: AlertTriangle,
                   color: "bg-red-100 text-red-600"
               });

@@ -5,6 +5,9 @@ import { DashboardStats } from './components/Dashboard';
 import { FoodItem, ClaimHistoryItem, UserData } from '../../types';
 import { NotificationsPage } from '../common/Notifications';
 import { OnboardingTour } from '../common/OnboardingTour';
+import { ImpactWidget } from './components/Dashboard/ImpactWidget';
+import { NearbyRequests } from './components/Dashboard/NearbyRequests';
+import { db } from '../../services/db';
 
 interface ProviderIndexProps {
   onOpenNotifications: () => void;
@@ -25,7 +28,28 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
     onCompleteOnboarding 
 }) => {
   const [viewMode, setViewMode] = useState<'main' | 'notifications'>('main');
+  const [socialImpact, setSocialImpact] = useState<any>(null);
+  const [isLoadingImpact, setIsLoadingImpact] = useState(true);
+  
   const userName = currentUser?.name || 'Restoran Berkah';
+
+  // Fetch Aggregate Social Impact Data
+  React.useEffect(() => {
+      if (currentUser?.id) {
+          const fetchImpact = async () => {
+              setIsLoadingImpact(true);
+              try {
+                  const data = await db.getSocialImpact(currentUser.id);
+                  setSocialImpact(data);
+              } catch (e) {
+                  console.error("Failed to fetch social impact:", e);
+              } finally {
+                  setIsLoadingImpact(false);
+              }
+          };
+          fetchImpact();
+      }
+  }, [currentUser?.id]);
 
   const handleFinishTour = () => {
       if (onCompleteOnboarding) {
@@ -33,12 +57,9 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
       }
   };
 
-  const { stats, weeklyData } = useMemo(() => {
+  const stats = useMemo(() => {
       const myClaims = claimHistory.filter(h => h.providerName === userName);
-      const completedOrders = myClaims.filter(h => h.status === 'completed');
-      
-      const totalPoints = completedOrders.reduce((acc, curr) => acc + (curr.socialImpact?.totalPoints || 0), 0);
-      const co2Saved = completedOrders.reduce((acc, curr) => acc + (curr.socialImpact?.co2Saved || 0), 0);
+      const completedOrders = myClaims.filter(h => h.status?.toLowerCase() === 'completed');
       
       // REAL RATING CALCULATION
       const ratedOrders = completedOrders.filter(h => h.rating && h.rating > 0);
@@ -47,48 +68,15 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
 
       const pendingReports = myClaims.filter(h => h.isReported).length;
       
-      // --- CALCULATE WEEKLY TRENDS (Real Data) ---
-      const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-      const today = new Date();
-      const weeklyPoints = [0, 0, 0, 0, 0, 0, 0];
-      const weeklyCo2 = [0, 0, 0, 0, 0, 0, 0];
-
-      completedOrders.forEach(order => {
-          // Parse date dd/mm/yyyy
-          const parts = order.date.split('/');
-          if (parts.length === 3) {
-              const orderDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-              
-              // Check if order is within last 7 days
-              const diffTime = Math.abs(today.getTime() - orderDate.getTime());
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-              
-              if (diffDays <= 7) {
-                  const dayIndex = orderDate.getDay(); // 0 = Sunday
-                  const points = order.socialImpact?.totalPoints || 0;
-                  const co2 = order.socialImpact?.co2Saved || 0;
-                  
-                  weeklyPoints[dayIndex] += points;
-                  weeklyCo2[dayIndex] += co2;
-              }
-          }
-      });
-
       return {
-          stats: {
-            totalPoints,
-            co2Saved: parseFloat(co2Saved.toFixed(2)),
-            activeStock: foodItems.length,
-            completedOrders: completedOrders.length,
-            pendingReports,
-            avgRating
-          },
-          weeklyData: {
-              points: weeklyPoints,
-              co2: weeklyCo2
-          }
+          totalPoints: socialImpact?.totalPoints || 0,
+          totalPotentialPoints: socialImpact?.totalPotentialPoints || 0,
+          activeStock: foodItems.length,
+          completedOrders: completedOrders.length,
+          pendingReports,
+          avgRating
       };
-  }, [foodItems, claimHistory, userName]);
+  }, [foodItems, claimHistory, userName, socialImpact]);
 
   if (viewMode === 'notifications') {
       return (
@@ -96,7 +84,7 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
             role="provider" 
             onBack={() => setViewMode('main')} 
             claimHistory={claimHistory} 
-            inventory={foodItems} // Pass Inventory here for upload success notifs
+            inventory={foodItems}
             userName={userName} 
         />
       );
@@ -104,7 +92,6 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
 
   return (
     <>
-        {/* Render Tour based on isNewUser property from currentUser */}
         {currentUser?.isNewUser && (
             <OnboardingTour role="provider" onFinish={handleFinishTour} />
         )}
@@ -127,10 +114,13 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
             
             <DashboardStats 
                 setActiveTab={onNavigate} 
-                stats={stats} 
-                weeklyPoints={weeklyData.points}
-                weeklyCo2={weeklyData.co2}
+                stats={stats}
+                userId={String(currentUser?.id || '')}
             />
+
+            <div className="mt-10">
+                <NearbyRequests />
+            </div>
         </div>
     </>
   );

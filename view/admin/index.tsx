@@ -28,6 +28,9 @@ interface AdminIndexProps {
   broadcastMessages: BroadcastMessage[];
   setBroadcastMessages: React.Dispatch<React.SetStateAction<BroadcastMessage[]>>;
   allAddresses?: Address[];
+  appSettings?: any;
+  setAppSettings?: React.Dispatch<React.SetStateAction<any>>;
+  onRefresh?: () => Promise<void>;
 }
 
 export const AdminIndex: React.FC<AdminIndexProps> = ({ 
@@ -42,7 +45,10 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
     setGlobalFAQs,
     broadcastMessages,
     setBroadcastMessages,
-    allAddresses = []
+    allAddresses = [],
+    appSettings,
+    setAppSettings,
+    onRefresh
 }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -69,7 +75,7 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
                       usersCount: globalUsers.length,
                       claimsCount: globalClaims.length,
                       inventoryCount: globalInventory.length,
-                      reportsCount: globalClaims.filter(c => c.isReported).length
+                      reportsCount: globalClaims.filter(c => c.isReported && c.reportId && c.reportStatus?.toUpperCase() !== 'RESOLVED' && c.reportStatus?.toUpperCase() !== 'REJECTED').length
                   }}
                   claims={globalClaims}
                   inventory={globalInventory}
@@ -83,7 +89,7 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
                   claims={globalClaims} 
                />;
       case 'moderation':
-        return <Moderation claims={globalClaims} />;
+        return <Moderation claims={globalClaims} onReportUpdate={() => onRefresh && onRefresh()} />;
       case 'distribution':
         return <Distribution claims={globalClaims} users={globalUsers} inventory={globalInventory} allAddresses={allAddresses} />;
       case 'impact':
@@ -95,7 +101,7 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
       case 'admins':
         return <AdminList />;
       case 'settings':
-        return <SystemConfig />;
+        return <SystemConfig appSettings={appSettings} setAppSettings={setAppSettings} />;
       default:
         return <Overview 
                   onNavigate={setActiveTab} 

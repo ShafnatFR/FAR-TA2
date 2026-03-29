@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, MapPin, Phone, Clock, Navigation, CheckCircle, Package, ChevronRight, PlayCircle, Bike, Car, Box, AlertTriangle, ShieldCheck, MessageCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Clock, Navigation, CheckCircle, Package, ChevronRight, PlayCircle, Bike, Car, Box, AlertTriangle, ShieldCheck, MessageCircle, Copy } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { VolunteerTask } from '../../../types';
 
@@ -12,9 +12,14 @@ interface MissionDetailProps {
 }
 
 export const MissionDetail: React.FC<MissionDetailProps> = ({ task, onBack, onAccept, volunteerName = "Relawan" }) => {
-    // Deteksi rekomendasi kendaraan berdasarkan kuantitas
     const isLargeQuantity = task.quantity?.toLowerCase().includes('box') && parseInt(task.quantity) > 5;
     const vehicleRecommendation = isLargeQuantity ? 'Mobil' : 'Motor';
+
+    const handleCopy = (text?: string) => {
+        if (!text || text === "Alamat Donatur Tidak Ditemukan" || text === "Alamat Penerima Belum Diisi") return;
+        navigator.clipboard.writeText(text);
+        alert("Alamat berhasil disalin ke clipboard!");
+    };
 
     const handleFullRoute = () => {
         if (!userLocation) {
@@ -180,7 +185,16 @@ export const MissionDetail: React.FC<MissionDetailProps> = ({ task, onBack, onAc
                             <div>
                                 <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">TITIK PENJEMPUTAN</p>
                                 <h4 className="font-bold text-stone-900 dark:text-white">{task.from}</h4>
-                                <p className="text-xs text-stone-500 mt-0.5">{task.donorLocation?.address}</p>
+                                <div className="flex items-start gap-2 mt-0.5">
+                                    <p className="text-xs text-stone-500 flex-1 leading-relaxed">{task.donorLocation?.address}</p>
+                                    <button 
+                                        onClick={() => handleCopy(task.donorLocation?.address)}
+                                        className="p-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-500 transition-colors shrink-0 active:scale-95"
+                                        title="Salin Alamat Donatur"
+                                    >
+                                        <Copy className="w-3 h-3" />
+                                    </button>
+                                </div>
                                 <div className="mt-2 flex gap-2">
                                     <span className="text-[10px] bg-stone-100 dark:bg-stone-800 px-2 py-1 rounded text-stone-600 dark:text-stone-400 font-bold flex items-center gap-1">
                                         <Clock className="w-3 h-3" /> Buka: {task.donorOpenHours}
@@ -195,7 +209,16 @@ export const MissionDetail: React.FC<MissionDetailProps> = ({ task, onBack, onAc
                             <div>
                                 <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">TITIK PENGANTARAN</p>
                                 <h4 className="font-bold text-stone-900 dark:text-white">{task.to}</h4>
-                                <p className="text-xs text-stone-500 mt-0.5">{task.receiverLocation?.address}</p>
+                                <div className="flex items-start gap-2 mt-0.5">
+                                    <p className="text-xs text-stone-500 flex-1 leading-relaxed">{task.receiverLocation?.address}</p>
+                                    <button 
+                                        onClick={() => handleCopy(task.receiverLocation?.address)}
+                                        className="p-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-500 transition-colors shrink-0 active:scale-95"
+                                        title="Salin Alamat Penerima"
+                                    >
+                                        <Copy className="w-3 h-3" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

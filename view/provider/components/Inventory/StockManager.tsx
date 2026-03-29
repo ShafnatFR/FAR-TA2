@@ -13,6 +13,8 @@ import { Button } from '../../../components/Button';
 import { db } from '../../../../services/db';
 import { checkAndExpireItems } from '../../../../utils/expiryChecker';
 
+const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10 Minutes
+
 interface StockManagerProps {
     foodItems: FoodItem[];
     setFoodItems: React.Dispatch<React.SetStateAction<FoodItem[]>>;
@@ -46,8 +48,39 @@ export const StockManager: React.FC<StockManagerProps> = ({
     // State to track if provider has setup an address
     const [hasAddress, setHasAddress] = useState<boolean | null>(null);
 
-    // Function to fetch local specific data (Address & Inventory)
-    const fetchInventoryAndAddress = async () => {
+    // Function to fetch local specific data (Address & Inventory) with Caching Logic
+    const fetchInventoryAndAddress = async (forceRefresh: boolean = false) => {
+        const cacheKey = `far_inventory_${currentUser?.id}`;
+        const addressCacheKey = `far_has_address_${currentUser?.id}`;
+        
+        // 1. Check Cache first if not forcing refresh
+        if (!forceRefresh) {
+            const cachedInventoryObj = localStorage.getItem(cacheKey);
+            const cachedHasAddress = localStorage.getItem(addressCacheKey);
+            
+            if (cachedInventoryObj && cachedHasAddress !== null) {
+                try {
+                    const { data, timestamp } = JSON.parse(cachedInventoryObj);
+                    const now = Date.now();
+                    
+                    // Check if cache is still valid (< 10 minutes)
+                    if (now - timestamp < CACHE_EXPIRY_MS) {
+                        console.log("%c[CACHE-VALID] Using local inventory & address data", "color: #c2410c; font-weight: bold;");
+                        if (Array.isArray(data) && data.length > 0) {
+                            setFoodItems(data);
+                            setHasAddress(cachedHasAddress === 'true');
+                            setIsFetching(false);
+                            return; // EXIT EARLY
+                        }
+                    } else {
+                        console.log("%c[CACHE-EXPIRED] Data is older than 10 mins, re-fetching...", "color: #ef4444; font-weight: bold;");
+                    }
+                } catch (e) {
+                    console.error("Cache parse error", e);
+                }
+            }
+        }
+
         setIsFetching(true);
         try {
             // Pass currentUser.id to filter on backend
@@ -59,10 +92,17 @@ export const StockManager: React.FC<StockManagerProps> = ({
             if (inventoryData && Array.isArray(inventoryData)) {
                 const processedInventory = await checkAndExpireItems(inventoryData);
                 setFoodItems(processedInventory);
+                // Save to Cache with TIMESTAMP
+                localStorage.setItem(cacheKey, JSON.stringify({ 
+                    data: processedInventory, 
+                    timestamp: Date.now() 
+                }));
             }
 
-            // Check if address exists
-            setHasAddress(addressData && addressData.length > 0);
+            // Check if address exists and save to Cache
+            const exists = !!(addressData && addressData.length > 0);
+            setHasAddress(exists);
+            localStorage.setItem(addressCacheKey, String(exists));
 
         } catch (error) {
             console.error("Gagal memuat data:", error);
@@ -73,13 +113,12 @@ export const StockManager: React.FC<StockManagerProps> = ({
 
     // Combined Refresh Handler
     const handleRefresh = async () => {
-        setIsFetching(true);
         // Call parent refresh (Global Data)
         if (onParentRefresh) {
             await onParentRefresh(); 
         }
-        // Call local refresh
-        await fetchInventoryAndAddress();
+        // Call local refresh with FORCE
+        await fetchInventoryAndAddress(true);
     };
 
     // Gabungkan state loading internal dan dari parent (transisi)
@@ -96,18 +135,39 @@ export const StockManager: React.FC<StockManagerProps> = ({
 
     const handleAddNewItem = (newItem: FoodItem) => {
         // Optimistic Update: Tambahkan langsung ke state agar UI responsif
-        setFoodItems([newItem, ...foodItems]);
+        const updatedItems = [newItem, ...foodItems];
+        setFoodItems(updatedItems);
         setIsAddingNew(false);
+        
+        // Update Cache with timestamp
+        localStorage.setItem(`far_inventory_${currentUser?.id}`, JSON.stringify({
+            data: updatedItems,
+            timestamp: Date.now()
+        }));
     };
 
     const handleUpdateItem = (updatedItem: FoodItem) => {
-        setFoodItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+        const updatedItems = foodItems.map(item => item.id === updatedItem.id ? updatedItem : item);
+        setFoodItems(updatedItems);
         setSelectedProduct(updatedItem); 
+        
+        // Update Cache with timestamp
+        localStorage.setItem(`far_inventory_${currentUser?.id}`, JSON.stringify({
+            data: updatedItems,
+            timestamp: Date.now()
+        }));
     };
 
     const handleDeleteItem = (id: string) => {
-        setFoodItems(prev => prev.filter(item => item.id !== id));
+        const updatedItems = foodItems.filter(item => item.id !== id);
+        setFoodItems(updatedItems);
         setSelectedProduct(null);
+        
+        // Update Cache with timestamp
+        localStorage.setItem(`far_inventory_${currentUser?.id}`, JSON.stringify({
+            data: updatedItems,
+            timestamp: Date.now()
+        }));
     };
 
     // Backend now returns only the relevant items.

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Mar 15, 2026 at 06:19 AM
+-- Generation Time: Mar 28, 2026 at 11:53 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -28,7 +28,7 @@ SET time_zone = "+00:00";
 --
 
 CREATE TABLE `addresses` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
   `label` varchar(255) NOT NULL,
   `full_address` text NOT NULL,
@@ -37,9 +37,7 @@ CREATE TABLE `addresses` (
   `contact_name` varchar(255) NOT NULL,
   `contact_phone` varchar(255) NOT NULL,
   `is_primary` tinyint(1) DEFAULT 0,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  CONSTRAINT `addresses_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -92,7 +90,9 @@ CREATE TABLE `claims` (
   `unique_code` varchar(255) DEFAULT NULL,
   `is_scanned` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `completed_at` timestamp NULL DEFAULT NULL
+  `completed_at` timestamp NULL DEFAULT NULL,
+  `courier_name` varchar(255) DEFAULT NULL,
+  `courier_status` varchar(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -176,7 +176,7 @@ CREATE TABLE `reports` (
   `claim_id` int(11) NOT NULL,
   `category` varchar(255) DEFAULT NULL,
   `description` text DEFAULT NULL,
-  `evidence_photo` varchar(255) DEFAULT NULL,
+  `evidence_photo` longtext DEFAULT NULL,
   `status` enum('NEW','IN_PROGRESS','RESOLVED','REJECTED') DEFAULT 'NEW',
   `admin_notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()

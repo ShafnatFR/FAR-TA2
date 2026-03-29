@@ -11,6 +11,8 @@ import { FaqSection } from './components/FaqSection';
 import { SavedItems } from './components/SavedItems';
 import { ClaimHistory, ReportModal, ReviewModal } from './components/ClaimHistory';
 import { ClaimHistoryDetail } from './components/ClaimHistoryDetail'; 
+import { GamificationSummary } from './components/GamificationSummary';
+import { PointHistory } from './components/PointHistory';
 import { HistoryList } from '../volunteer/components/HistoryList';
 import { FoodDetail } from '../receiver/components/FoodDetail';
 import { db } from '../../services/db';
@@ -22,7 +24,7 @@ interface ProfileIndexProps {
   isDarkMode: boolean;
   toggleTheme: () => void;
   onNavigate: (view: string) => void;
-  initialView?: 'main' | 'address' | 'history' | 'saved' | 'edit' | 'security' | 'faq';
+  initialView?: 'main' | 'address' | 'history' | 'saved' | 'edit' | 'security' | 'faq' | 'point_history';
   savedItems: SavedItem[];
   setSavedItems: React.Dispatch<React.SetStateAction<SavedItem[]>>;
   claimHistory: ClaimHistoryItem[];
@@ -190,18 +192,14 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
             onSubmitReport(selectedHistoryItem.id, reason, description, evidence);
             setReportModalOpen(false);
             
-            // Update local state to show 'Reported' status immediately
-            // Note: reportEvidence in ClaimHistoryItem is currently string | undefined in types.ts, 
-            // but we are passing array for upload. The type definition might need update or casting.
-            // For now we store the first image or stringify it to keep UI consistent if it expects string
-            const evidenceStr = evidence.length > 0 ? JSON.stringify(evidence) : "";
-            
+            // Update local state to show 'Reported' status immediately.
+            // reportEvidence is now an array (string[])
             setSelectedHistoryItem(prev => prev ? { 
                 ...prev, 
                 isReported: true,
                 reportReason: reason,
                 reportDescription: description,
-                reportEvidence: evidenceStr
+                reportEvidence: evidence
             } : null);
             alert("Laporan Anda telah dikirim.");
         }
@@ -212,8 +210,8 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
             onSubmitReview(selectedHistoryItem.id, rating, review, media);
             setReviewModalOpen(false);
             
-            // Update local state to show rating immediately
-            setSelectedHistoryItem(prev => prev ? { ...prev, rating, review } : null);
+            // Update local state to show rating & media immediately
+            setSelectedHistoryItem(prev => prev ? { ...prev, rating, review, reviewMedia: media } : null);
             alert("Terima kasih atas ulasan Anda!");
         }
     };
@@ -343,6 +341,15 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
                 </div>
                 <FaqSection faqs={globalFAQs} />
             </div>
+        );
+    }
+
+    if (currentView === 'point_history') {
+        return (
+            <PointHistory 
+                currentUser={userData} 
+                onBack={() => setCurrentView('main')} 
+            />
         );
     }
 
@@ -486,7 +493,15 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
                 />
             )}
 
-            <div className="mt-8 px-4 space-y-3 max-w-lg mx-auto">
+            <div className="mt-8 px-4 space-y-6 max-w-lg mx-auto">
+                {/* Gamification Widget */}
+                <GamificationSummary 
+                    currentUser={userData} 
+                    currentPoints={typeof stats?.value3 === 'number' ? stats.value3 : 0} 
+                    onViewHistory={() => setCurrentView('point_history')}
+                />
+
+                <div className="space-y-3">
                 {role === 'receiver' && (
                     <>
                         <h3 className="text-sm font-semibold text-stone-500 uppercase tracking-wider mb-2 ml-2">Aktivitas</h3>
@@ -518,5 +533,6 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
                 </div>
             </div>
         </div>
-    );
+    </div>
+);
 };

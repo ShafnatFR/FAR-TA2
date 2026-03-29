@@ -54,16 +54,9 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, ba
         return <div className="text-xl">{currentTier.icon}</div>;
     };
 
-    const handleOptionClick = (type: 'upload' | 'badge') => {
+    const handleOptionClick = (type: 'badge') => {
         setShowEditMenu(false);
-        if (type === 'upload') {
-            setCoverMode('image');
-            onEditBanner(); 
-            const url = prompt("Masukkan URL Gambar Banner:");
-            if (url) setCustomBanner(url);
-        } else {
-            setShowBadgeSelector(true);
-        }
+        setShowBadgeSelector(true);
     };
 
     const applyBadgeCover = async (badgeId: string) => {
@@ -138,19 +131,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, ba
                         {showEditMenu && (
                             <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-stone-900 rounded-xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden animate-in fade-in slide-in-from-top-2">
                                 <button 
-                                    onClick={() => handleOptionClick('upload')}
-                                    className="w-full text-left px-4 py-3 text-sm font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2 border-b border-stone-100 dark:border-stone-800"
+                                    onClick={() => handleOptionClick('badge')}
+                                    className="w-full text-left px-4 py-3 text-sm font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2"
                                 >
-                                    <Image className="w-4 h-4 text-orange-500" /> Upload Foto
+                                    <Award className="w-4 h-4 text-purple-500" /> Pilih Badge
                                 </button>
-                                {role !== 'volunteer' && (
-                                    <button 
-                                        onClick={() => handleOptionClick('badge')}
-                                        className="w-full text-left px-4 py-3 text-sm font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2"
-                                    >
-                                        <Award className="w-4 h-4 text-purple-500" /> Pilih Badge
-                                    </button>
-                                )}
                             </div>
                         )}
                     </div>

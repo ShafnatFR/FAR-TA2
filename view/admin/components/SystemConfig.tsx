@@ -1,7 +1,7 @@
-
-import React, { useState } from 'react';
-import { Settings, Lock, Loader2, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, Lock, Loader2, CheckCircle, Bug } from 'lucide-react';
 import { Button } from '../../components/Button';
+import { db } from '../../../services/db';
 
 interface SystemSetting {
     id: string;
@@ -16,13 +16,21 @@ interface SystemSetting {
     unit?: string;
 }
 
-export const SystemConfig: React.FC = () => {
+export const SystemConfig: React.FC<{ appSettings?: any, setAppSettings?: any }> = ({ appSettings, setAppSettings }) => {
     const [settings, setSettings] = useState<SystemSetting[]>([
         // Emergency Controls
         { id: 'maintenance', name: 'Maintenance Mode', description: 'Matikan semua akses user sementara.', value: false, type: 'toggle', category: 'emergency' },
         { id: 'disable_signup', name: 'Disable New Signups', description: 'Cegah pendaftaran user baru.', value: false, type: 'toggle', category: 'emergency' },
         { id: 'readonly_mode', name: 'Read-Only Mode', description: 'User hanya bisa melihat, tidak bisa menambah/edit data.', value: false, type: 'toggle', category: 'emergency' },
+        // Debug
+        { id: 'disableExpiryLogic', name: 'Abaikan Kedaluwarsa Data (Debug)', description: 'Tampilkan semua makanan tanpa mengecek waktu kedaluwarsa (bypass isFoodExpired frontend & backend).', value: appSettings?.disableExpiryLogic || false, type: 'toggle', category: 'debug' }
     ]);
+
+    useEffect(() => {
+        if (appSettings) {
+             setSettings(prev => prev.map(s => s.id === 'disableExpiryLogic' ? { ...s, value: appSettings.disableExpiryLogic } : s));
+        }
+    }, [appSettings]);
 
     const [activeCategory, setActiveCategory] = useState('emergency');
     const [isSaving, setIsSaving] = useState(false);
@@ -31,6 +39,7 @@ export const SystemConfig: React.FC = () => {
 
     const categories = [
         { id: 'emergency', name: 'Emergency Controls', icon: Lock, color: 'red' },
+        { id: 'debug', name: 'Developer & Debugging', icon: Bug, color: 'orange' },
     ];
 
     const updateSetting = (id: string, value: boolean | number | string) => {
@@ -40,10 +49,20 @@ export const SystemConfig: React.FC = () => {
 
     const handleSaveConfig = async () => {
         setIsSaving(true);
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Map settings to push to backend
+        const settingsToUpdate = {
+             disableExpiryLogic: settings.find(s => s.id === 'disableExpiryLogic')?.value
+        };
+
+        try {
+            const updated = await db.updateSettings(settingsToUpdate);
+            if (setAppSettings) setAppSettings(updated);
+            setHasChanges(false);
+            setSuccessMessage('Konfigurasi berhasil disimpan!');
+        } catch (e) {
+            console.error("Failed to save settings", e);
+        }
         setIsSaving(false);
-        setHasChanges(false);
-        setSuccessMessage('Konfigurasi berhasil disimpan!');
         setTimeout(() => setSuccessMessage(''), 3000);
     };
 

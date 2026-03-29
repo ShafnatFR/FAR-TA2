@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, ShieldCheck, Clock, Search, Info, ChevronLeft, ChevronRight, Heart, LayoutGrid, StretchHorizontal, Timer, MapPin, Truck, Package, Store, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { Bell, ShieldCheck, Clock, Search, Info, ChevronLeft, ChevronRight, Heart, LayoutGrid, StretchHorizontal, Timer, MapPin, Truck, Package, Store, Sparkles, Loader2, RefreshCw, MessageSquare } from 'lucide-react';
 import { Input } from '../../components/Input';
 import { EmptyState } from '../../common/EmptyState';
 import { FoodItem } from '../../../types';
@@ -16,16 +16,19 @@ interface FoodListProps {
   onToggleSave: (item: FoodItem) => void;
   isLoading?: boolean;
   onRefresh?: () => void;
+  disableExpiryLogic?: boolean;
 }
 
 export const FoodList: React.FC<FoodListProps> = ({ 
   onOpenNotifications, 
   onSelectItem, 
+  onOpenRequests,
   foodItems, 
   savedIds, 
   onToggleSave,
   isLoading,
-  onRefresh
+  onRefresh,
+  disableExpiryLogic = false
 }) => {
   const [filterMethod, setFilterMethod] = useState<'all' | 'pickup' | 'delivery'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,8 +43,10 @@ export const FoodList: React.FC<FoodListProps> = ({
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             item.providerName.toLowerCase().includes(searchQuery.toLowerCase());
       
-      // Real-time expiry check
-      const isNotExpired = item.status === 'available' && (item.expiryTime ? new Date(item.expiryTime) > new Date() : true);
+      // Real-time expiry check (bypassed if disableExpiryLogic is true)
+      const isNotExpired = disableExpiryLogic 
+          ? true 
+          : (item.status === 'available' && (item.expiryTime ? new Date(item.expiryTime) > new Date() : true));
       
       return matchesMethod && matchesSearch && isNotExpired;
     })
@@ -93,9 +98,22 @@ export const FoodList: React.FC<FoodListProps> = ({
           <h1 className="text-2xl font-black text-stone-900 dark:text-white leading-none tracking-tight">Makanan Sekitar</h1>
           <p className="text-stone-500 dark:text-stone-400 mt-1 text-xs font-bold">Surplus makanan layak konsumsi.</p>
         </div>
-        <button onClick={onOpenNotifications} className="p-3 text-stone-500 hover:text-orange-500 transition-colors bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-200 dark:border-stone-800">
-            <Bell className="w-6 h-6" />
-        </button>
+        <div className="flex gap-2">
+            <button 
+                onClick={onOpenRequests} 
+                className="p-3 text-stone-500 hover:text-blue-600 transition-colors bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-200 dark:border-stone-800 relative group"
+                title="Pusat Permintaan"
+            >
+                <MessageSquare className="w-6 h-6" />
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-blue-600 text-white text-[7px] font-black rounded-full shadow-lg group-hover:scale-110 transition-transform">BUTUH</span>
+            </button>
+            <button 
+                onClick={onOpenNotifications} 
+                className="p-3 text-stone-500 hover:text-orange-500 transition-colors bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-stone-200 dark:border-stone-800"
+            >
+                <Bell className="w-6 h-6" />
+            </button>
+        </div>
       </header>
 
       <div className="flex flex-col gap-4 mb-6">

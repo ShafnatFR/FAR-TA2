@@ -1,9 +1,10 @@
 
 import React from 'react';
-import { ArrowLeft, MapPin, Package, Truck, Navigation, ShoppingBag, CalendarDays, QrCode, CheckCircle2, ShieldCheck, ShieldAlert, MessageCircle, Clock, Info, AlertTriangle, Star } from 'lucide-react';
+import { ArrowLeft, MapPin, Package, Truck, Navigation, ShoppingBag, CalendarDays, QrCode, CheckCircle2, ShieldCheck, ShieldAlert, MessageCircle, Clock, Info, AlertTriangle, Star, X, ChevronRight, ArrowRight } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { ClaimHistoryItem } from '../../../types';
 import { optimizeUnsplashUrl } from '../../../utils/imageOptimizer';
+import { MediaLightbox } from '../../common/MediaLightbox';
 
 interface ClaimHistoryDetailProps {
     item: ClaimHistoryItem;
@@ -39,12 +40,33 @@ export const ClaimHistoryDetail: React.FC<ClaimHistoryDetailProps> = ({ item, on
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
     };
 
-    const isActionable = item.status === 'active';
+    const isActionable = ['active', 'pending', 'in_progress'].includes(item.status?.toLowerCase() || '');
     const isScanned = item.isScanned || false;
     const isCompleted = item.status === 'completed';
+    const [previewMediaIndex, setPreviewMediaIndex] = React.useState<number | null>(null);
+    const [previewMediaArray, setPreviewMediaArray] = React.useState<string[]>([]);
+    
+    const isVideo = (url: string) => {
+        if (!url) return false;
+        return url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/) || url.startsWith('data:video');
+    };
+
+    const openPreview = (idx: number, arr: any[]) => {
+        const stringArr = arr.map(a => String(a));
+        setPreviewMediaArray(stringArr);
+        setPreviewMediaIndex(idx);
+    };
 
     return (
         <div className="fixed inset-0 bg-[#FDFBF7] dark:bg-stone-950 z-[100] overflow-y-auto animate-in slide-in-from-right duration-300">
+            {/* Media Preview Modal */}
+            {previewMediaIndex !== null && (
+                <MediaLightbox 
+                    mediaUrls={previewMediaArray} 
+                    initialIndex={previewMediaIndex} 
+                    onClose={() => setPreviewMediaIndex(null)} 
+                />
+            )}
             {/* Hero Image Section */}
             <div className="relative h-72 md:h-80 w-full">
                 <img src={optimizeUnsplashUrl(item.imageUrl, 1080)} alt={item.foodName} className="w-full h-full object-cover" />
@@ -102,24 +124,101 @@ export const ClaimHistoryDetail: React.FC<ClaimHistoryDetailProps> = ({ item, on
 
                 {/* Review Section if Rated */}
                 {item.rating && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/10 p-5 rounded-3xl border border-yellow-200 dark:border-yellow-800 flex gap-4 items-center">
-                        <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-800 rounded-2xl flex items-center justify-center text-yellow-600 dark:text-yellow-400 font-black text-lg">
-                            {item.rating}
+                    <div className="bg-yellow-50 dark:bg-yellow-900/5 p-6 rounded-[2rem] border border-yellow-200 dark:border-yellow-900/50 space-y-4 shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-yellow-400 text-white rounded-2xl flex items-center justify-center font-black text-xl shadow-lg shadow-yellow-500/20">
+                                {item.rating}
+                            </div>
+                            <div>
+                                <h4 className="text-xs font-black text-yellow-800 dark:text-yellow-500 uppercase tracking-[.2em] mb-1">Ulasan Anda</h4>
+                                <div className="flex gap-0.5">
+                                    {[...Array(5)].map((_, i) => (
+                                        <Star key={i} className={`w-3.5 h-3.5 ${i < (item.rating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-stone-300'}`} />
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-xs font-bold text-yellow-700 dark:text-yellow-400 uppercase tracking-widest mb-1">Ulasan Anda</p>
-                            <p className="text-sm text-stone-700 dark:text-stone-300 italic">"{item.review}"</p>
-                        </div>
+                        
+                        <p className="text-sm text-stone-700 dark:text-stone-300 italic leading-relaxed bg-white/50 dark:bg-black/20 p-4 rounded-2xl border border-yellow-100 dark:border-yellow-900/30">
+                            "{item.review || 'Tanpa ulasan tertulis'}"
+                        </p>
+
+                        {/* Review Media */}
+                        {item.reviewMedia && item.reviewMedia.length > 0 && (
+                            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                                {item.reviewMedia.map((mediaUrl, idx) => (
+                                    <div key={idx} className="relative group shrink-0" onClick={() => openPreview(idx, item.reviewMedia || [])}>
+                                        {isVideo(mediaUrl) ? (
+                                            <div className="w-28 h-28 rounded-2xl border-2 border-white dark:border-stone-800 bg-black overflow-hidden relative cursor-pointer shadow-md">
+                                                <video src={mediaUrl} className="w-full h-full object-cover opacity-60" />
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <div className="w-8 h-8 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center">
+                                                        <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-white border-b-[5px] border-b-transparent ml-0.5" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <img 
+                                                src={mediaUrl} 
+                                                alt={`Review ${idx}`} 
+                                                className="w-28 h-28 object-cover rounded-2xl border-2 border-white dark:border-stone-800 shadow-md cursor-pointer hover:scale-105 transition-transform" 
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* Status Reported */}
                 {item.isReported && (
-                    <div className="bg-red-50 dark:bg-red-900/10 p-5 rounded-3xl border border-red-200 dark:border-red-800 flex gap-3 items-start animate-pulse">
-                        <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                        <div>
-                            <p className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-widest">Laporan Telah Dikirim</p>
-                            <p className="text-xs text-red-600 dark:text-red-300 mt-1">Tim admin sedang meninjau masalah ini. Mohon tunggu informasi selanjutnya.</p>
+                    <div className="bg-red-50 dark:bg-red-900/5 p-6 rounded-[2rem] border border-red-200 dark:border-red-900/50 space-y-4 shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-red-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-red-500/20">
+                                <AlertTriangle className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h4 className="text-xs font-black text-red-800 dark:text-red-500 uppercase tracking-[.2em] mb-1">Laporan Terkirim</h4>
+                                <p className="text-xs font-bold text-red-600/70">{item.reportReason || 'Masalah Terdeteksi'}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white/50 dark:bg-black/20 p-4 rounded-2xl border border-red-100 dark:border-red-900/30 space-y-2">
+                            <p className="text-xs font-bold text-red-800 dark:text-red-400 uppercase tracking-wider">Deskripsi Masalah:</p>
+                            <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed font-medium">
+                                {item.reportDescription || 'Tidak ada deskripsi tambahan.'}
+                            </p>
+                        </div>
+
+                        {/* Report Evidence */}
+                        {item.reportEvidence && (Array.isArray(item.reportEvidence) ? item.reportEvidence.length > 0 : true) && (
+                            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                                {(Array.isArray(item.reportEvidence) ? item.reportEvidence : [item.reportEvidence]).map((mediaUrl, idx, fullArr) => (
+                                    <div key={idx} className="relative group shrink-0" onClick={() => openPreview(idx, fullArr)}>
+                                        {isVideo(String(mediaUrl)) ? (
+                                            <div className="w-28 h-28 rounded-2xl border-2 border-white dark:border-stone-800 bg-black overflow-hidden relative cursor-pointer shadow-md">
+                                                <video src={String(mediaUrl)} className="w-full h-full object-cover opacity-60" />
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <div className="w-8 h-8 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center">
+                                                        <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-white border-b-[5px] border-b-transparent ml-0.5" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <img 
+                                                src={String(mediaUrl)} 
+                                                alt={`Evidence ${idx}`} 
+                                                className="w-28 h-28 object-cover rounded-2xl border-2 border-white dark:border-stone-800 shadow-md cursor-pointer hover:scale-105 transition-transform" 
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-red-500 uppercase tracking-widest bg-red-100/50 dark:bg-red-900/20 py-2 px-4 rounded-full w-fit">
+                            <Clock className="w-3 h-3 animate-spin-slow" /> Sedang Ditinjau Admin
                         </div>
                     </div>
                 )}

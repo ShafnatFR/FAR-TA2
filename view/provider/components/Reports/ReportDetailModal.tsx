@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, X, Package, ShoppingBag, CheckCircle2, Image as ImageIcon, MessageSquare, Maximize2 } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { Report } from '../../../../types';
+import { MediaLightbox } from '../../../common/MediaLightbox';
 
 interface ReportDetailModalProps {
     report: Report;
@@ -19,7 +20,7 @@ export const ReportDetailModal: React.FC<ReportDetailModalProps> = ({
     onHandleAction,
     onContactAdmin 
 }) => {
-    const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+    const [previewMediaIndex, setPreviewMediaIndex] = useState<number | null>(null);
 
     const handleCheckDetail = () => {
         onClose(); // Close this modal first
@@ -33,6 +34,8 @@ export const ReportDetailModal: React.FC<ReportDetailModalProps> = ({
 
     // Filter out valid strings only
     const validEvidence = evidenceList.filter((url: any) => typeof url === 'string' && url.length > 5);
+
+    const isVideo = (url: string) => url.toLowerCase().match(/\.(mp4|webm|ogg|mov)$/) || url.startsWith('data:video');
 
     return (
         <>
@@ -70,13 +73,24 @@ export const ReportDetailModal: React.FC<ReportDetailModalProps> = ({
                                         <div 
                                             key={idx}
                                             className="relative group cursor-zoom-in rounded-[1.5rem] overflow-hidden border-2 border-stone-100 dark:border-stone-800 shadow-lg bg-stone-100 dark:bg-stone-800 aspect-video"
-                                            onClick={() => setZoomedImage(url)}
+                                            onClick={() => setPreviewMediaIndex(idx)}
                                         >
-                                            <img 
-                                                src={url} 
-                                                alt={`Bukti Laporan ${idx + 1}`} 
-                                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.05]" 
-                                            />
+                                            {isVideo(url) ? (
+                                                <div className="w-full h-full relative">
+                                                    <video src={url} className="w-full h-full object-cover opacity-80" />
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 text-white group-hover:scale-110 transition-transform">
+                                                            <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-white border-b-[6px] border-b-transparent ml-1" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <img 
+                                                    src={url} 
+                                                    alt={`Bukti Laporan ${idx + 1}`} 
+                                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.05]" 
+                                                />
+                                            )}
                                             <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                 <div className="bg-white/95 backdrop-blur-md p-2 rounded-full shadow-lg scale-90 group-hover:scale-100 transition-transform">
                                                     <Maximize2 className="w-4 h-4 text-stone-900" />
@@ -158,21 +172,13 @@ export const ReportDetailModal: React.FC<ReportDetailModalProps> = ({
                 </div>
             </div>
 
-            {/* Lightbox / Zoomed View Overlay */}
-            {zoomedImage && (
-                <div 
-                    className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 animate-in zoom-in duration-300 cursor-zoom-out"
-                    onClick={() => setZoomedImage(null)}
-                >
-                    <button className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors">
-                        <X className="w-8 h-8" />
-                    </button>
-                    <img 
-                        src={zoomedImage} 
-                        alt="Zoomed Evidence" 
-                        className="max-w-full max-h-full object-contain shadow-2xl"
-                    />
-                </div>
+            {/* Media Lightbox */}
+            {previewMediaIndex !== null && (
+                <MediaLightbox 
+                    mediaUrls={validEvidence} 
+                    initialIndex={previewMediaIndex} 
+                    onClose={() => setPreviewMediaIndex(null)} 
+                />
             )}
         </>
     );

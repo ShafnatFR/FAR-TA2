@@ -33,6 +33,7 @@ export interface SocialImpactData {
   waterSaved: number;
   landSaved: number;
   wasteReduction: number;
+  totalPotentialPoints?: number;
   level?: string;
   // Detailed breakdown fields for persistence
   co2Breakdown?: ImpactBreakdownItem[];
@@ -90,12 +91,14 @@ export interface ClaimHistoryItem {
   isReported?: boolean;
   reportReason?: string;
   reportDescription?: string;
-  reportEvidence?: string;
+  reportEvidence?: string[];
   imageUrl: string;
   uniqueCode?: string;
   claimedQuantity?: string;
   deliveryMethod?: 'pickup' | 'delivery';
-  location?: { lat: number; lng: number; address: string };
+  location?: { lat: number; lng: number; address: string; label?: string };
+  providerLocation?: { lat: number; lng: number; address: string; label?: string };
+  receiverLocation?: { lat: number; lng: number; address: string; label?: string };
   distributionHours?: { start: string; end: string };
   description?: string;
   socialImpact?: SocialImpactData;

@@ -4,6 +4,7 @@ import { ArrowLeft, ShieldCheck, Clock, CheckCircle, MapPin, Navigation, Minus, 
 import { Button } from '../../components/Button';
 import { FoodItem, ClaimHistoryItem, UserData } from '../../../types';
 import { StoreIcon } from './StoreIcon';
+import { AIVerificationCard } from './AIVerificationCard';
 import { db } from '../../../services/db';
 import { formatDateTime, isFoodExpired } from '../../../utils/transformers';
 import { optimizeUnsplashUrl } from '../../../utils/imageOptimizer';
@@ -197,6 +198,16 @@ export const FoodDetail: React.FC<FoodDetailProps> = ({ item, onBack, onClaim, i
                     </div>
                 </div>
             </div>
+            
+            {/* AI Verification Section */}
+            {item.aiVerification ? (
+                <AIVerificationCard verification={item.aiVerification} />
+            ) : (
+                <div className="bg-stone-50 dark:bg-stone-900/50 p-6 rounded-[2.5rem] border border-stone-100 dark:border-stone-800 flex flex-col items-center text-center opacity-70">
+                    <ShieldCheck className="w-8 h-8 text-stone-300 mb-2" />
+                    <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest leading-relaxed">Verifikasi AI Standar Aktif<br/>Halal & Kualitas Terjamin</p>
+                </div>
+            )}
 
             <div className="space-y-4">
                 <h3 className="font-bold text-xl text-stone-900 dark:text-white">Lokasi Pengambilan</h3>

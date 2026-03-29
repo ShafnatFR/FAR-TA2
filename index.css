@@ -1,5 +1,61 @@
-/* Global styles for Food AI Rescue */
+
+/* Poker Card Swap Animations */
+@keyframes card-swap-right {
+  0% { 
+    transform: scale(0.8) translateX(100%) rotate(15deg); 
+    opacity: 0; 
+  }
+  60% {
+    transform: scale(1.05) translateX(-5%) rotate(-2deg);
+  }
+  100% { 
+    transform: scale(1) translateX(0) rotate(0deg); 
+    opacity: 1; 
+  }
+}
+
+@keyframes card-swap-left {
+  0% { 
+    transform: scale(0.8) translateX(-100%) rotate(-15deg); 
+    opacity: 0; 
+  }
+  60% {
+    transform: scale(1.05) translateX(5%) rotate(2deg);
+  }
+  100% { 
+    transform: scale(1) translateX(0) rotate(0deg); 
+    opacity: 1; 
+  }
+}
+
+.animate-card-swap-right {
+  animation: card-swap-right 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-card-swap-left {
+  animation: card-swap-left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes slide-out-down {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(50px) scale(0.95); opacity: 0; }
+}
+
+.animate-slide-out-down {
+  animation: slide-out-down 0.3s ease-in forwards;
+}
+
+/* Base styles */
 body {
   margin: 0;
   padding: 0;
+  font-family: 'Outfit', sans-serif;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

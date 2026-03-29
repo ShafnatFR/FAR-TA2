@@ -92,12 +92,21 @@ export const db = {
     
   getProviderDashboard: (providerName: string) => 
     sendRequest<any>('GET_PROVIDER_DASHBOARD', { providerName }),
-  respondReport: (reportId: string, status: 'resolved' | 'dismissed') =>
-    sendRequest<any>('RESPOND_REPORT', { id: reportId, status }),
+  updateReportStatus: (id: string, status: string) =>
+    sendRequest<any>('UPDATE_REPORT_STATUS', { id, status }),
 
   // --- UTILS ---
   getFAQs: () => sendRequest<FAQItem[]>('GET_FAQS'),
   getBroadcasts: () => sendRequest<BroadcastMessage[]>('GET_NOTIFICATIONS'),
   sendBroadcast: (message: BroadcastMessage) => sendRequest<BroadcastMessage>('SEND_BROADCAST', message),
   initDB: () => sendRequest<string>('INIT_DB'),
+  getSettings: () => sendRequest<any>('GET_SETTINGS'),
+  updateSettings: (settings: any) => sendRequest<any>('UPDATE_SETTINGS', settings),
+  getSocialImpact: (userId: string) => sendRequest<any>('GET_SOCIAL_IMPACT', { userId }),
+  getImpactChart: (userId: string, period: string = '7d') => sendRequest<any>('GET_IMPACT_CHART', { userId, period }),
+  getFoodRequests: (receiverId?: string) => sendRequest<any[]>('GET_FOOD_REQUESTS', { receiverId }),
+  addFoodRequest: (data: any) => sendRequest<any>('ADD_FOOD_REQUEST', data),
+  deleteFoodRequest: (id: string) => sendRequest<any>('DELETE_FOOD_REQUEST', { id }),
+  getPointHistory: (userId: string) => sendRequest<any[]>('GET_POINT_HISTORY', { userId }),
+  getBadges: () => sendRequest<any[]>('GET_BADGES'),
 };

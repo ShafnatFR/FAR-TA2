@@ -29,35 +29,37 @@ async function uploadToFileSystem(base64Data, filename, targetFolder = 'fotoProf
             fs.mkdirSync(uploadDir, { recursive: true });
         }
 
-        const base64Content = base64Data.split(',')[1] || base64Data;
+        const base64Parts = base64Data.split(',');
+        const mimeType = (base64Parts[0].match(/:(.*?);/)?.[1]) || 'image/jpeg';
+        const base64Content = base64Parts[1] || base64Data;
         const buffer = Buffer.from(base64Content, 'base64');
         const filePath = path.join(uploadDir, filename);
         
-        // Sharp processing: Resize to max 1200x1200px and compress to JPEG (quality 80)
-        // This ensures file size is significantly reduced while maintaining quality
-        await sharp(buffer)
-            .resize(1200, 1200, {
-                fit: 'inside',
-                withoutEnlargement: true
-            })
-            .jpeg({ quality: 80 })
-            .toFile(filePath);
+        if (mimeType.startsWith('image/')) {
+            // Sharp processing: Resize to max 1200x1200px and compress to JPEG (quality 80)
+            await sharp(buffer)
+                .resize(1200, 1200, {
+                    fit: 'inside',
+                    withoutEnlargement: true
+                })
+                .jpeg({ quality: 80 })
+                .toFile(filePath);
 
-        // Check file size and compress further if > 2MB (rare for 1200px jpeg @ 80%)
-        let stats = fs.statSync(filePath);
-        if (stats.size > 2 * 1024 * 1024) {
-            console.log(`[FILE] File still > 2MB (${(stats.size / 1024 / 1024).toFixed(2)}MB). Compressing further...`);
-            const tempPath = filePath + '.tmp';
-            await sharp(filePath)
-                .jpeg({ quality: 60 })
-                .toFile(tempPath);
-            fs.renameSync(tempPath, filePath);
+            let stats = fs.statSync(filePath);
+            if (stats.size > 2 * 1024 * 1024) {
+                const tempPath = filePath + '.tmp';
+                await sharp(filePath).jpeg({ quality: 60 }).toFile(tempPath);
+                fs.renameSync(tempPath, filePath);
+            }
+        } else {
+            // For videos and other binary files, save directly
+            fs.writeFileSync(filePath, buffer);
+            console.log(`[FILE] Binary file saved directly: ${filename} (${(buffer.length / 1024 / 1024).toFixed(2)}MB)`);
         }
 
-        // Return the relative URL path
         return `/assets/${targetFolder}/${filename}`;
     } catch (error) {
-        console.error('File Upload & Compression Error:', error);
+        console.error('File Upload Error:', error);
         throw error;
     }
 }

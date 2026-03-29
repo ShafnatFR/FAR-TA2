@@ -1,33 +1,33 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Shield, X, CheckCircle2, Clock, Filter, ChevronLeft, ChevronRight, Package, MessageCircle, Image as ImageIcon } from 'lucide-react';
+import { Shield, X, CheckCircle2, Clock, Filter, ChevronLeft, ChevronRight, Package, MessageCircle, Image as ImageIcon, ArrowUpDown } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Report, ClaimHistoryItem } from '../../../types';
 
 interface ModerationProps {
     claims?: ClaimHistoryItem[];
+    onReportUpdate?: () => void;
 }
 
-export const Moderation: React.FC<ModerationProps> = ({ claims = [] }) => {
+export const Moderation: React.FC<ModerationProps> = ({ claims = [], onReportUpdate }) => {
   // Transform reported claims to Report type
   const realReports: Report[] = useMemo(() => {
       return claims
-        .filter(c => c.isReported)
+        .filter(c => c.isReported && c.reportId) // Only include existing reports
         .map(c => {
-            // Helper to handle evidence format
             let evidence = c.reportEvidence;
-            // If it's a JSON string array '["url"]', keep it as string to be parsed later or pass as is
-            // If it's a single URL string, it's fine.
             return {
-                id: `REP-${c.id}`,
+                id: String((c as any).reportId), // Use actual DB report ID
                 orderId: c.id,
                 foodName: c.foodName,
                 title: (c as any).reportReason || 'Masalah Umum',
                 description: (c as any).reportDescription || 'Tidak ada deskripsi rinci.',
                 date: c.date,
-                status: (c as any).reportStatus || 'new',
-                reporter: 'Penerima Manfaat',
+                status: ((c as any).reportStatus || 'NEW').toUpperCase(),
+                reporter: c.receiverName || 'Penerima Manfaat',
+                reporterPhone: (c as any).reporterPhone || c.receiverPhone,
                 target: c.providerName,
+                targetPhone: c.donorPhone,
                 isUrgent: true,
                 type: 'quality',
                 evidenceUrl: evidence
@@ -36,7 +36,9 @@ export const Moderation: React.FC<ModerationProps> = ({ claims = [] }) => {
   }, [claims]);
 
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'all' | 'new' | 'investigating' | 'resolved'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'REJECTED'>('all');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -44,25 +46,77 @@ export const Moderation: React.FC<ModerationProps> = ({ claims = [] }) => {
   // Local state to manage status changes within the admin session
   const [localStatuses, setLocalStatuses] = useState<{[key: string]: string}>({});
 
-  const handleAction = (status: 'resolved' | 'dismissed') => {
+  const handleAction = async (status: 'RESOLVED' | 'REJECTED' | 'IN_PROGRESS') => {
       if(selectedReport) {
-          setLocalStatuses(prev => ({...prev, [selectedReport.id]: status}));
-          setSelectedReport(null);
+          try {
+              const { db } = await import('../../../services/db');
+              await db.updateReportStatus(selectedReport.id, status);
+              setLocalStatuses(prev => ({...prev, [selectedReport.id]: status}));
+              if (onReportUpdate) onReportUpdate();
+              if (status !== 'IN_PROGRESS') setSelectedReport(null);
+          } catch (error) {
+              console.error("Failed to update report status:", error);
+              alert("Gagal memperbarui status laporan.");
+          }
       }
   };
 
-  const handleChatUser = (role: 'Pelapor' | 'Terlapor', name: string) => {
-      const phone = "6285215376975";
+  const handleOpenDetail = (report: Report) => {
+      const currentStatus = getStatus(report);
+      setSelectedReport({...report, status: currentStatus as any});
+  };
+
+  const handleChatUser = async (role: 'Pelapor' | 'Terlapor', name: string) => {
+      // Determine phone number based on role
+      const phone = role === 'Pelapor'
+          ? (selectedReport as any)?.reporterPhone
+          : (selectedReport as any)?.targetPhone;
+      const phoneClean = (phone || '').replace(/[^0-9]/g, '').replace(/^0/, '62');
       const message = `Halo ${role} ${name}, saya Admin Moderasi Food AI Rescue. Saya ingin menindaklanjuti laporan yang masuk.`;
-      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+      
+      // Auto-set to IN_PROGRESS if currently NEW when starting interaction
+      if (selectedReport && getStatus(selectedReport) === 'NEW') {
+          await handleAction('IN_PROGRESS');
+      }
+      
+      window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const getStatus = (report: Report) => localStatuses[report.id] || report.status;
 
-  const filteredReports = realReports.filter(r => {
-      const currentStatus = getStatus(r);
-      return filterStatus === 'all' || currentStatus === filterStatus;
-  });
+  const filteredReports = useMemo(() => {
+      let filtered = realReports.filter(r => {
+          const currentStatus = getStatus(r);
+          const matchesStatus = filterStatus === 'all' || currentStatus === filterStatus;
+          
+          if (!matchesStatus) return false;
+          
+          if (!searchQuery) return true;
+          
+          const q = searchQuery.toLowerCase();
+          const priorityLabel = r.priority === 'high' ? 'urgent' : 'medium';
+          const statusLabel = currentStatus === 'REJECTED' ? 'ditolak' : 
+                            currentStatus === 'RESOLVED' ? 'selesai' : 
+                            currentStatus === 'IN_PROGRESS' ? 'diproses' : 'baru';
+
+          return (
+              r.title.toLowerCase().includes(q) ||
+              r.description.toLowerCase().includes(q) ||
+              r.target?.toLowerCase().includes(q) ||
+              r.foodName.toLowerCase().includes(q) ||
+              priorityLabel.includes(q) ||
+              statusLabel.includes(q) ||
+              r.category?.toLowerCase().includes(q)
+          );
+      });
+
+      // Sort by date accurately
+      return filtered.sort((a, b) => {
+          const dateA = new Date(a.date).getTime() || 0;
+          const dateB = new Date(b.date).getTime() || 0;
+          return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+      });
+  }, [realReports, filterStatus, sortOrder, localStatuses, searchQuery]);
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -106,36 +160,41 @@ export const Moderation: React.FC<ModerationProps> = ({ claims = [] }) => {
                <p className="text-xs text-stone-500 uppercase font-bold mt-1">Total Laporan</p>
            </div>
            <div 
-                onClick={() => setFilterStatus('new')}
-                className={`p-5 rounded-2xl border-l-4 border-red-500 shadow-sm bg-red-50/50 cursor-pointer transition-all hover:scale-[1.02] ${filterStatus === 'new' ? 'ring-2 ring-red-200' : ''}`}
-            >
-               <h3 className="text-3xl font-black text-red-600">{realReports.filter(r => getStatus(r) === 'new').length}</h3>
-               <p className="text-xs text-red-500 uppercase font-bold mt-1">Baru</p>
-           </div>
-           <div 
-                onClick={() => setFilterStatus('investigating')}
-                className={`p-5 rounded-2xl border-l-4 border-orange-500 shadow-sm bg-orange-50/50 cursor-pointer transition-all hover:scale-[1.02] ${filterStatus === 'investigating' ? 'ring-2 ring-orange-200' : ''}`}
-            >
-               <h3 className="text-3xl font-black text-orange-600">{realReports.filter(r => getStatus(r) === 'investigating').length}</h3>
-               <p className="text-xs text-orange-500 uppercase font-bold mt-1">Diproses</p>
-           </div>
-           <div 
-                onClick={() => setFilterStatus('resolved')}
-                className={`p-5 rounded-2xl border-l-4 border-green-500 shadow-sm bg-green-50/50 cursor-pointer transition-all hover:scale-[1.02] ${filterStatus === 'resolved' ? 'ring-2 ring-green-200' : ''}`}
-            >
-               <h3 className="text-3xl font-black text-green-600">{realReports.filter(r => getStatus(r) === 'resolved').length}</h3>
-               <p className="text-xs text-green-500 uppercase font-bold mt-1">Selesai</p>
-           </div>
+                 onClick={() => setFilterStatus('NEW')}
+                 className={`p-5 rounded-2xl border-l-4 border-red-500 shadow-sm bg-red-50/50 cursor-pointer transition-all hover:scale-[1.02] ${filterStatus === 'NEW' ? 'ring-2 ring-red-200' : ''}`}
+             >
+                <h3 className="text-3xl font-black text-red-600">{realReports.filter(r => getStatus(r) === 'NEW').length}</h3>
+                <p className="text-xs text-red-500 uppercase font-bold mt-1">Baru</p>
+            </div>
+            <div 
+                 onClick={() => setFilterStatus('IN_PROGRESS')}
+                 className={`p-5 rounded-2xl border-l-4 border-orange-500 shadow-sm bg-orange-50/50 cursor-pointer transition-all hover:scale-[1.02] ${filterStatus === 'IN_PROGRESS' ? 'ring-2 ring-orange-200' : ''}`}
+             >
+                <h3 className="text-3xl font-black text-orange-600">{realReports.filter(r => getStatus(r) === 'IN_PROGRESS').length}</h3>
+                <p className="text-xs text-orange-500 uppercase font-bold mt-1">Diproses</p>
+            </div>
+            <div 
+                 onClick={() => setFilterStatus('RESOLVED')}
+                 className={`p-5 rounded-2xl border-l-4 border-green-500 shadow-sm bg-green-50/50 cursor-pointer transition-all hover:scale-[1.02] ${filterStatus === 'RESOLVED' ? 'ring-2 ring-green-200' : ''}`}
+             >
+                <h3 className="text-3xl font-black text-green-600">{realReports.filter(r => getStatus(r) === 'RESOLVED').length}</h3>
+                <p className="text-xs text-green-500 uppercase font-bold mt-1">Selesai</p>
+            </div>
        </div>
 
        {/* Search & Filter */}
        <div className="flex gap-4 items-center">
-           <input 
-                type="text" 
-                placeholder="Cari laporan..." 
-                className="flex-1 p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-[#FDFBF7] dark:bg-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" 
-           />
-           <div className="flex items-center gap-2">
+            <input 
+                 type="text" 
+                 placeholder="Cari tipe, isi, target, prioritas atau status..." 
+                 value={searchQuery}
+                 onChange={(e) => {
+                     setSearchQuery(e.target.value);
+                     setCurrentPage(1);
+                 }}
+                 className="flex-1 p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-[#FDFBF7] dark:bg-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" 
+            />
+            <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-stone-500" />
                 <span className="text-sm font-bold text-stone-600 dark:text-stone-300">Filter:</span>
                 <select 
@@ -144,11 +203,21 @@ export const Moderation: React.FC<ModerationProps> = ({ claims = [] }) => {
                     className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 px-4 py-2.5 rounded-xl text-sm font-bold text-stone-600 dark:text-stone-300 focus:outline-none focus:border-orange-500"
                 >
                     <option value="all">Semua Status</option>
-                    <option value="new">Baru</option>
-                    <option value="investigating">Diproses</option>
-                    <option value="resolved">Selesai</option>
+                    <option value="NEW">Baru</option>
+                    <option value="IN_PROGRESS">Diproses</option>
+                    <option value="RESOLVED">Selesai</option>
+                    <option value="REJECTED">Ditolak</option>
                 </select>
-           </div>
+
+                <button 
+                    onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    className="flex items-center gap-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 px-4 py-2.5 rounded-xl text-sm font-bold text-stone-600 dark:text-stone-300 hover:border-orange-500 transition-colors"
+                    title={`Urutkan: ${sortOrder === 'asc' ? 'Terlama' : 'Terbaru'}`}
+                >
+                    <ArrowUpDown className={`w-4 h-4 ${sortOrder === 'asc' ? 'rotate-180' : ''} transition-transform`} />
+                    <span className="hidden md:inline">{sortOrder === 'asc' ? 'ASC' : 'DESC'}</span>
+                </button>
+            </div>
        </div>
 
        {/* Report List */}
@@ -198,14 +267,18 @@ export const Moderation: React.FC<ModerationProps> = ({ claims = [] }) => {
                                    {report.priority === 'high' ? 'Urgent' : 'Medium'}
                                </span>
                            </td>
-                           <td className="p-5">
-                               <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${currentStatus === 'new' ? 'bg-red-50 text-red-600 border border-red-100' : currentStatus === 'resolved' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-orange-50 text-orange-600 border border-orange-100'}`}>
-                                   {currentStatus === 'dismissed' ? 'Ditolak' : currentStatus.replace('_', ' ')}
-                               </span>
-                           </td>
-                           <td className="p-5 text-right">
-                               <Button variant="outline" className="h-9 w-auto text-xs px-4" onClick={() => setSelectedReport({...report, status: currentStatus as any})}>Detail</Button>
-                           </td>
+                             <td className="p-5">
+                                 <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide ${
+                                     currentStatus === 'NEW' ? 'bg-red-50 text-red-600 border border-red-100' : 
+                                     currentStatus === 'RESOLVED' ? 'bg-green-50 text-green-600 border border-green-100' : 
+                                     currentStatus === 'REJECTED' ? 'bg-stone-100 text-stone-600 border border-stone-200' : 
+                                     'bg-orange-50 text-orange-600 border border-orange-100'}`}>
+                                     {currentStatus}
+                                 </span>
+                             </td>
+                            <td className="p-5 text-right">
+                                <Button variant="outline" className="h-9 w-auto text-xs px-4" onClick={() => handleOpenDetail(report)}>Detail</Button>
+                            </td>
                        </tr>
                    )})
                    )}
@@ -280,10 +353,10 @@ export const Moderation: React.FC<ModerationProps> = ({ claims = [] }) => {
                         </Button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                         <Button variant="ghost" onClick={() => handleAction('dismissed')}>Tolak Laporan</Button>
-                         <Button onClick={() => handleAction('resolved')} className="bg-green-600 hover:bg-green-700"><CheckCircle2 className="w-4 h-4 mr-2" /> Tandai Selesai</Button>
-                    </div>
+                     <div className="grid grid-cols-2 gap-3">
+                          <Button variant="ghost" onClick={() => handleAction('REJECTED')}>Tolak Laporan</Button>
+                          <Button onClick={() => handleAction('RESOLVED')} className="bg-green-600 hover:bg-green-700"><CheckCircle2 className="w-4 h-4 mr-2" /> Tandai Selesai</Button>
+                     </div>
                 </div>
             </div>
        )}

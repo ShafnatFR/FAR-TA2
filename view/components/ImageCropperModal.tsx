@@ -109,7 +109,6 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({ image, onC
                         crop={crop}
                         zoom={zoom}
                         aspect={1}
-                        objectFit="cover"
                         onCropChange={setCrop}
                         onCropComplete={onCropCompleteInternal}
                         onZoomChange={setZoom}
@@ -120,7 +119,8 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({ image, onC
                                 scale: `${flip.horizontal ? -1 : 1} ${flip.vertical ? -1 : 1}`,
                                 transition: isResetting 
                                     ? 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), scale 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                                    : 'scale 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                                    : 'none',
+                                objectFit: 'contain'
                             }
                         }}
                     />

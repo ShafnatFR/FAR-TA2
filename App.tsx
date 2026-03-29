@@ -19,6 +19,8 @@ import { VerificationRejectedModal } from './view/common/VerificationRejectedMod
 import { Home, User, Box, Loader2, History } from 'lucide-react';
 import { db } from './services/db';
 
+const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10 Minutes
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<string>('login');
   const [role, setRole] = useState<UserRole>(null);
@@ -59,6 +61,9 @@ const App: React.FC = () => {
       { id: 'f2', question: 'Bagaimana cara kerja sistem reputasi (poin)?', answer: 'Sistem reputasi dihitung berdasarkan keaktifan dan integritas Anda:\n- **Donatur:** Mendapat poin dari jumlah makanan yang diselamatkan dan rating ulasan.\n- **Penerima:** Mendapat poin dari ulasan yang diberikan dan ketepatan waktu penukaran.\n- **Relawan:** Mendapat poin dari jarak tempuh dan keberhasilan misi.', category: 'Umum' }
   ]);
 
+  // Global App Settings from Backend
+  const [appSettings, setAppSettings] = useState<{ disableExpiryLogic: boolean }>({ disableExpiryLogic: false });
+
   // --- SESSION CHECK ON MOUNT ---
   useEffect(() => {
     const checkSession = () => {
@@ -91,9 +96,44 @@ const App: React.FC = () => {
 
   const toggleTheme = () => setIsDarkMode(prev => !prev);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (forceRefresh: boolean = false) => {
         if (!role || !currentUser) return; 
         
+        const cacheKey = `far_global_data_${currentUser.id}_${role}`;
+        
+        // 1. Check Global Cache
+        if (!forceRefresh) {
+            const cachedContent = localStorage.getItem(cacheKey);
+            if (cachedContent) {
+                try {
+                    const { inventory, claims, settings, timestamp } = JSON.parse(cachedContent);
+                    const now = Date.now();
+                    
+                    if (now - timestamp < CACHE_EXPIRY_MS) {
+                        console.log(`%c[GLOBAL-CACHE-VALID] Using cached data for ${role}`, 'color: #059669; font-weight: bold;');
+                        if (inventory) setFoodItems(inventory);
+                        if (claims) setClaimHistory(claims);
+                        if (settings) setAppSettings(settings);
+                        
+                        // Still need to fetch these if relevant as they aren't fully cached here
+                        if (role === 'volunteer') {
+                            const allAddrs = await db.getAddresses();
+                            setAllAddresses(allAddrs);
+                            const users = await db.getUsers();
+                            setGlobalUsers(users);
+                        }
+                        if (role === 'admin_manager' || role === 'super_admin') {
+                            const users = await db.getUsers();
+                            setGlobalUsers(users);
+                        }
+                        return; // EXIT EARLY
+                    }
+                } catch (e) {
+                    console.error("Global cache parse error", e);
+                }
+            }
+        }
+
         setIsGlobalLoading(true);
         try {
             const providerIdFilter = role === 'provider' ? currentUser.id : undefined;
@@ -103,20 +143,28 @@ const App: React.FC = () => {
 
             console.log("Fetching Data with Filters:", { providerIdFilter, claimsFilters });
 
-            const [inventoryData, claimsData] = await Promise.all([
+            const [inventoryData, claimsData, settingsData] = await Promise.all([
                 db.getInventory(providerIdFilter),
-                db.getClaims(claimsFilters)
+                db.getClaims(claimsFilters),
+                db.getSettings()
             ]);
 
+            if (settingsData) setAppSettings(settingsData);
             if (inventoryData) setFoodItems(inventoryData);
             
-            if (claimsData) {
-                if (role === 'receiver') {
-                    setClaimHistory(claimsData.filter(c => c.receiverId === currentUser.id));
-                } else {
-                    setClaimHistory(claimsData);
-                }
+            let finalClaims = claimsData || [];
+            if (role === 'receiver' && claimsData) {
+                finalClaims = claimsData.filter(c => c.receiverId === currentUser.id);
             }
+            setClaimHistory(finalClaims);
+
+            // Update GLOBAL CACHE
+            localStorage.setItem(cacheKey, JSON.stringify({
+                inventory: inventoryData,
+                claims: finalClaims,
+                settings: settingsData,
+                timestamp: Date.now()
+            }));
 
             if (role === 'volunteer') {
                 const allAddrs = await db.getAddresses();
@@ -136,7 +184,7 @@ const App: React.FC = () => {
   }, [role, currentUser]);
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, [fetchData]); 
 
   const profileStats = useMemo(() => {
@@ -506,7 +554,7 @@ const App: React.FC = () => {
             stats={profileStats}
             onSubmitReview={handleSubmitReview} 
             onSubmitReport={handleSubmitReport} 
-            onRefresh={fetchData} 
+            onRefresh={() => fetchData(true)} 
             allAddresses={allAddresses}
             onUpdateUser={handleUpdateUser}
             onEditAvatar={handleEditAvatar}
@@ -525,7 +573,7 @@ const App: React.FC = () => {
                 initialFilter={historyFilter} 
                 onUpdateStatus={handleUpdateStatus} 
                 currentUser={currentUser}
-                onRefresh={fetchData}
+                onRefresh={() => fetchData(true)}
                 onNavigate={(view) => {
                     if (view === 'profile-address') {
                         setProfileInitialTab('address');
@@ -582,8 +630,10 @@ const App: React.FC = () => {
       }
 
       if (role === 'receiver') {
-          // Filter out expired items for receivers
-          const activeFoodItems = foodItems.filter(item => !isFoodExpired(item.distributionEnd, item.expiryTime));
+          // Filter out expired items for receivers, unless disabled by admin
+          const activeFoodItems = appSettings.disableExpiryLogic 
+              ? foodItems 
+              : foodItems.filter(item => !isFoodExpired(item.distributionEnd, item.expiryTime));
           
           return (
             <ReceiverIndex 
@@ -591,6 +641,7 @@ const App: React.FC = () => {
                 onNavigateToHistory={() => { setProfileInitialTab('history'); setCurrentView('profile'); }}
                 foodItems={activeFoodItems}
                 savedItems={savedItems}
+                disableExpiryLogic={appSettings.disableExpiryLogic}
                 onToggleSave={(item) => {
                     if (savedItems.some(s => s.id === item.id)) {
                         setSavedItems(savedItems.filter(s => s.id !== item.id));
@@ -602,7 +653,7 @@ const App: React.FC = () => {
                 claimHistory={claimHistory} 
                 currentUser={currentUser} 
                 isLoading={isGlobalLoading} 
-                onRefresh={fetchData} 
+                onRefresh={() => fetchData(true)} 
             />
           );
       }
@@ -617,7 +668,7 @@ const App: React.FC = () => {
                 currentUser={currentUser}
                 allAddresses={allAddresses} 
                 isLoading={isGlobalLoading} 
-                onRefresh={fetchData} 
+                onRefresh={() => fetchData(true)} 
                 globalUsers={globalUsers}
                 inventory={foodItems}
             />
@@ -639,6 +690,9 @@ const App: React.FC = () => {
                 broadcastMessages={broadcastMessages}
                 setBroadcastMessages={setBroadcastMessages}
                 allAddresses={allAddresses}
+                appSettings={appSettings}
+                setAppSettings={setAppSettings}
+                onRefresh={() => fetchData(true)}
             />
           );
       }

@@ -12,6 +12,9 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
+// --- GLOBAL STATE ---
+let appSettings = { disableExpiryLogic: false };
+
 // --- HELPER: Action Router ---
 // Mirrored from GAS doPost structure to make it easy to refactor frontend db.ts
 app.post('/api', async (req, res) => {
@@ -23,7 +26,10 @@ app.post('/api', async (req, res) => {
         switch (action) {
             case 'REGISTER_USER': result = await registerUser(data); break;
             case 'LOGIN_USER': result = await loginUser(data); break;
-            case 'GET_USERS': result = await getAllData('users'); break;
+            case 'GET_USERS': 
+                const users = await getAllData('users'); 
+                result = users.map(u => ({ ...u, joinDate: u.created_at || new Date().toISOString() })); 
+                break;
             case 'UPSERT_USER': result = await upsertUser(data); break;
             
             case 'GET_ADDRESSES': result = await getAddresses(data.userId); break;
@@ -43,11 +49,28 @@ app.post('/api', async (req, res) => {
             case 'VERIFY_ORDER_QR': result = await verifyOrderQR(data); break;
             case 'SUBMIT_REVIEW': result = await submitReview(data); break;
             case 'SUBMIT_REPORT': result = await submitReport(data); break;
+            case 'UPDATE_REPORT_STATUS': result = await updateReportStatus(data.id, data.status); break;
 
             case 'GET_FAQS': result = await getAllData('faqs'); break;
             case 'GET_NOTIFICATIONS': result = await getAllData('notifications'); break;
             case 'SEND_BROADCAST': result = await sendBroadcast(data); break;
             
+            case 'GET_SETTINGS': result = appSettings; break;
+            case 'UPDATE_SETTINGS': 
+                appSettings = { ...appSettings, ...data };
+                result = appSettings; 
+                break;
+
+            case 'GET_SOCIAL_IMPACT': result = await getSocialImpact(data.userId); break;
+            case 'GET_IMPACT_CHART': result = await getImpactChart(data.userId, data.period); break;
+            
+            case 'GET_FOOD_REQUESTS': result = await getFoodRequests(data.receiverId); break;
+            case 'ADD_FOOD_REQUEST': result = await addFoodRequest(data); break;
+            case 'DELETE_FOOD_REQUEST': result = await deleteData('food_requests', data.id); break;
+
+            case 'GET_POINT_HISTORY': result = await getPointHistory(data.userId); break;
+            case 'GET_BADGES': result = await getAllData('badges'); break;
+
             case 'UPLOAD_IMAGE': 
                 const { uploadToFileSystem } = require('./fileService');
                 const targetFolder = data.folderType || 'fotoProfil'; 
@@ -215,29 +238,73 @@ async function updateAddress(data) {
 }
 
 async function getInventory(providerId) {
-    // Join with addresses to mirror backend.gs 'getInventoryWithLocation'
+    // Join logic as per foodairescue.sql schema
+    // Fields: id, provider_id, name, description, initial_quantity, current_quantity, min_quantity, max_quantity, 
+    // expiry_time, distribution_start_time, distribution_end_time, delivery_method, status, image_url, created_at, updated_at
     let query = `
         SELECT f.id, f.provider_id as providerId, f.name, f.description, 
                f.initial_quantity as initialQuantity, f.current_quantity as currentQuantity, 
+               f.min_quantity as minQuantity, f.max_quantity as maxQuantity,
                f.expiry_time as expiryTime, f.image_url as imageUrl, 
                f.delivery_method as deliveryMethod, f.status,
-               a.latitude as lat, a.longitude as lng, a.full_address as address, a.id as addressId
+               f.distribution_start_time as distributionStart,
+               f.distribution_end_time as distributionEnd,
+               f.created_at as createdAt,
+               COALESCE(u.name, 'Donatur FAR') as providerName, 
+               COALESCE(u.phone, '-') as providerPhone,
+               a.latitude as lat, a.longitude as lng, a.full_address as address, a.id as addressId,
+               ai.is_edible as isEdible, ai.halal_score as halalScore, ai.quality_score as qualityScore, 
+               ai.reason as aiReason, ai.ingredients as aiIngredients,
+               si.total_potential_points as totalPoints, si.co2_per_portion as co2Saved, 
+               si.water_saved_liter as waterSaved, si.land_saved_sqm as landSaved, si.impact_details as impactDetails
         FROM food_items f
+        LEFT JOIN users u ON f.provider_id = u.id
         LEFT JOIN addresses a ON f.provider_id = a.user_id AND a.is_primary = 1
+        LEFT JOIN ai_verifications ai ON f.id = ai.food_id
+        LEFT JOIN social_impacts si ON f.id = si.food_id
     `;
     const params = [];
     if (providerId) {
         query += ' WHERE f.provider_id = ?';
         params.push(providerId);
+    } else {
+        // For receivers, only show available items with stock
+        // Lenient on status case and handle empty strings if any
+        query += ' WHERE (f.status = "AVAILABLE" OR f.status IS NULL OR f.status = "") AND f.current_quantity > 0';
     }
+
+    // Newest items first
+    query += ' ORDER BY f.created_at DESC';
+
     const [rows] = await db.query(query, params);
     return rows.map(item => ({
         ...item,
+        status: (item.status || 'available').toLowerCase(),
+        deliveryMethod: (item.deliveryMethod || 'pickup').toLowerCase(),
         location: item.lat ? {
             lat: item.lat,
             lng: item.lng,
             address: item.address,
             addressId: item.addressId
+        } : {
+            address: 'Lokasi tidak tersedia',
+            lat: -6.914744,
+            lng: 107.609810
+        },
+        aiVerification: item.halalScore !== null ? {
+            isEdible: !!item.isEdible,
+            halalScore: item.halalScore,
+            qualityScore: item.qualityScore,
+            reason: item.aiReason,
+            ingredients: item.aiIngredients ? (typeof item.aiIngredients === 'string' ? JSON.parse(item.aiIngredients) : item.aiIngredients) : []
+        } : { isEdible: true, halalScore: 90 }, // Default if missing
+        socialImpact: item.totalPoints !== null ? {
+            totalPoints: item.totalPoints,
+            co2Saved: item.co2Saved,
+            waterSaved: item.waterSaved,
+            landSaved: item.landSaved,
+            wasteReduction: item.co2Saved ? parseFloat((item.co2Saved * 0.45).toFixed(2)) : 0, 
+            impactDetails: item.impactDetails ? (typeof item.impactDetails === 'string' ? JSON.parse(item.impactDetails) : item.impactDetails) : []
         } : null
     }));
 }
@@ -273,16 +340,26 @@ async function deleteData(table, id) {
 
 async function getClaims(providerId, receiverId) {
     let query = `
-        SELECT c.*, f.name as foodName, u.name as providerName, 
+        SELECT c.*, f.name as foodName, f.image_url as imageUrl,
+               u_prov.name as providerName, u_prov.phone as donorPhone,
+               u_rec.name as receiverName, u_rec.phone as receiverPhone,
                a_prov.latitude as prov_lat, a_prov.longitude as prov_lng, a_prov.full_address as prov_addr,
-               a_prov.contact_name as prov_contact, a_prov.contact_phone as prov_phone,
+               a_prov.contact_name as prov_contact, a_prov.contact_phone as prov_phone, a_prov.label as prov_label,
                a_rec.latitude as rec_lat, a_rec.longitude as rec_lng, a_rec.full_address as rec_addr,
-               a_rec.contact_name as rec_contact, a_rec.contact_phone as rec_phone
+               a_rec.contact_name as rec_contact, a_rec.contact_phone as rec_phone, a_rec.label as rec_label,
+               rev.rating as rating, rev.comment as review, rev.review_media as reviewMedia,
+               rep.id as reportId, rep.category as reportReason, rep.description as reportDescription,
+               rep.evidence_photo as reportEvidence, rep.status as reportStatus,
+               u_reporter.phone as reporterPhone
         FROM claims c 
         JOIN food_items f ON c.food_id = f.id 
-        JOIN users u ON f.provider_id = u.id
+        JOIN users u_prov ON f.provider_id = u_prov.id
+        JOIN users u_rec ON c.receiver_id = u_rec.id
         LEFT JOIN addresses a_prov ON f.provider_id = a_prov.user_id AND a_prov.is_primary = 1
-        LEFT JOIN addresses a_rec ON c.receiver_id = a_rec.user_id AND a_rec.is_primary = 1
+        LEFT JOIN addresses a_rec ON c.address_id = a_rec.id
+        LEFT JOIN reviews rev ON c.id = rev.claim_id
+        LEFT JOIN reports rep ON c.id = rep.claim_id
+        LEFT JOIN users u_reporter ON rep.reporter_id = u_reporter.id
         WHERE 1=1
     `;
     const params = [];
@@ -297,19 +374,43 @@ async function getClaims(providerId, receiverId) {
     const [rows] = await db.query(query, params);
     return rows.map(c => ({
         ...c,
+        status: c.status.toLowerCase(),
         foodId: c.food_id,
         receiverId: c.receiver_id,
         volunteerId: c.volunteer_id,
-        claimedQuantity: c.claimed_quantity,
-        deliveryMethod: c.delivery_method,
+        claimedQuantity: String(c.claimed_quantity),
+        deliveryMethod: c.delivery_method.toLowerCase(),
         uniqueCode: c.unique_code,
         isScanned: !!c.is_scanned,
-        receiverName: c.rec_contact || c.receiverName, // Use contact name from address if available
-        receiverPhone: c.rec_phone,
-        donorPhone: c.prov_phone,
-        providerLocation: { lat: c.prov_lat, lng: c.prov_lng, address: c.prov_addr },
-        receiverLocation: { lat: c.rec_lat, lng: c.rec_lng, address: c.rec_addr },
-        location: { lat: c.prov_lat, lng: c.prov_lng, address: c.prov_addr } // Consistent with original backend.gs
+        date: c.created_at, // Mapping for frontend
+        receiverName: c.rec_contact || c.receiverName, 
+        receiverPhone: c.rec_phone || c.receiverPhone,
+        donorPhone: c.prov_phone || c.donorPhone,
+        providerName: c.providerName,
+        providerLocation: { lat: c.prov_lat, lng: c.prov_lng, address: c.prov_addr, label: c.prov_label },
+        receiverLocation: { lat: c.rec_lat, lng: c.rec_lng, address: c.rec_addr, label: c.rec_label },
+        location: { lat: c.prov_lat, lng: c.prov_lng, address: c.prov_addr, label: c.prov_label },
+        // Review & Report Data
+        reviewMedia: (() => {
+            if (!c.reviewMedia) return [];
+            if (typeof c.reviewMedia !== 'string') return c.reviewMedia;
+            try { return JSON.parse(c.reviewMedia); } catch (e) { return [c.reviewMedia]; }
+        })(),
+        isReported: !!c.reportId,
+        reportEvidence: (() => {
+            if (!c.reportEvidence) return [];
+            if (typeof c.reportEvidence !== 'string') return c.reportEvidence;
+            try { 
+                const parsed = JSON.parse(c.reportEvidence);
+                return Array.isArray(parsed) ? parsed : [parsed];
+            } catch (e) { 
+                // If it's a comma-separated string or just one URL
+                if (c.reportEvidence.includes(',')) return c.reportEvidence.split(',').map(s => s.trim());
+                return [c.reportEvidence]; 
+            }
+        })(),
+        reportStatus: c.reportStatus || null,
+        reporterPhone: c.reporterPhone || null
     }));
 }
 
@@ -345,8 +446,43 @@ async function processClaim(payload) {
 }
 
 async function updateClaimStatus(id, status, additionalData) {
-    await db.query('UPDATE claims SET status = ? WHERE id = ?', [status.toUpperCase(), id]);
-    return { id, status: status.toUpperCase() };
+    // Map 'active' from frontend to 'IN_PROGRESS' for DB enum
+    let dbStatus = status ? status.toUpperCase() : 'PENDING';
+    if (dbStatus === 'ACTIVE') dbStatus = 'IN_PROGRESS';
+    
+    // Ensure it's one of the valid ENUM values
+    const validStatuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+    if (!validStatuses.includes(dbStatus)) {
+        dbStatus = 'PENDING';
+    }
+
+    let query = 'UPDATE claims SET status = ?';
+    const params = [dbStatus];
+
+    if (additionalData) {
+        if (additionalData.volunteerId !== undefined) {
+            query += ', volunteer_id = ?';
+            params.push(additionalData.volunteerId);
+        }
+        if (additionalData.courierName !== undefined) {
+            query += ', courier_name = ?';
+            params.push(additionalData.courierName);
+        }
+        if (additionalData.courierStatus !== undefined) {
+            query += ', courier_status = ?';
+            params.push(additionalData.courierStatus.toLowerCase());
+        }
+        if (additionalData.isScanned !== undefined) {
+            query += ', is_scanned = ?';
+            params.push(additionalData.isScanned ? 1 : 0);
+        }
+    }
+
+    query += ' WHERE id = ?';
+    params.push(id);
+
+    await db.query(query, params);
+    return { id, status: dbStatus };
 }
 
 async function verifyOrderQR(data) {
@@ -378,9 +514,29 @@ async function submitReport(data) {
     const [claim] = await db.query('SELECT receiver_id FROM claims WHERE id = ?', [claimId]);
     await db.query(
         'INSERT INTO reports (reporter_id, claim_id, category, description, evidence_photo, status) VALUES (?, ?, ?, ?, ?, ?)',
-        [claim[0].receiver_id, claimId, reason, description, evidence, 'NEW']
+        [claim[0].receiver_id, claimId, reason, description, JSON.stringify(evidence), 'NEW']
     );
     return { status: 'success', claimId };
+}
+
+async function updateReportStatus(id, status) {
+    // id here is the actual report DB id (numeric)
+    const dbId = parseInt(String(id), 10);
+    if (isNaN(dbId)) {
+        throw new Error(`Invalid report ID: ${id}`);
+    }
+    const validStatuses = ['NEW', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'];
+    const dbStatus = status.toUpperCase();
+    if (!validStatuses.includes(dbStatus)) {
+        throw new Error(`Invalid report status: ${status}`);
+    }
+    console.log(`[UPDATE_REPORT_STATUS] id=${dbId}, status=${dbStatus}`);
+    const [result] = await db.query('UPDATE reports SET status = ? WHERE id = ?', [dbStatus, dbId]);
+    console.log(`[UPDATE_REPORT_STATUS] affected rows: ${result.affectedRows}`);
+    if (result.affectedRows === 0) {
+        throw new Error(`Report with id ${dbId} not found`);
+    }
+    return { id: dbId, status: dbStatus };
 }
 
 async function sendBroadcast(data) {
@@ -392,6 +548,170 @@ async function sendBroadcast(data) {
         console.warn('Notifications table not found');
         return data;
     }
+}
+
+async function getSocialImpact(userId) {
+    // 1. Get Total Points from Point History (Total Nilai Kebaikan)
+    const [pointRows] = await db.query(
+        'SELECT SUM(amount) as total FROM point_histories WHERE user_id = ?',
+        [userId]
+    );
+    const totalPoints = pointRows[0]?.total || 0;
+
+    // 2. Get Environmental Impact from Claims (Real Impact: CO2, Water, Land)
+    const [impactRows] = await db.query(`
+        SELECT 
+            SUM(si.co2_per_portion * c.claimed_quantity) as totalCo2,
+            SUM(si.water_saved_liter * c.claimed_quantity) as totalWater,
+            SUM(si.land_saved_sqm * c.claimed_quantity) as totalLand
+        FROM claims c
+        JOIN food_items f ON c.food_id = f.id
+        JOIN social_impacts si ON f.id = si.food_id
+        WHERE f.provider_id = ? AND c.status = 'COMPLETED'
+    `, [userId]);
+    const impact = impactRows[0] || {};
+
+    // 3. Get Total Potential Points from Social Impacts (Menjaga Bumi)
+    const [potentialRows] = await db.query(`
+        SELECT SUM(si.total_potential_points) as total
+        FROM social_impacts si
+        JOIN food_items f ON si.food_id = f.id
+        WHERE f.provider_id = ?
+    `, [userId]);
+    const totalPotentialPoints = potentialRows[0]?.total || 0;
+    
+    return {
+        totalCo2: parseFloat((Number(impact.totalCo2) || 0).toFixed(2)),
+        totalWater: parseFloat((Number(impact.totalWater) || 0).toFixed(2)),
+        totalLand: parseFloat((Number(impact.totalLand) || 0).toFixed(2)),
+        totalPoints: Math.round(Number(totalPoints) || 0),
+        totalPotentialPoints: Math.round(Number(totalPotentialPoints) || 0),
+        impactLevel: (Number(totalPoints) > 1000 ? 'SULTAN' : (Number(totalPoints) > 500 ? 'JURAGAN' : 'SAHABAT'))
+    };
+}
+
+async function getImpactChart(userId, period = '7d') {
+    let pointsData = [];
+    let impactData = [];
+    let labels = [];
+
+    if (period === '7d') {
+        labels = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+        // Points dari point_histories 7 hari terakhir
+        const [pointRows] = await db.query(`
+            SELECT DAYOFWEEK(created_at) as dw, SUM(amount) as total
+            FROM point_histories
+            WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY dw
+        `, [userId]);
+        pointsData = new Array(7).fill(0);
+        pointRows.forEach(r => { pointsData[r.dw - 1] = Number(r.total); });
+
+        // Potential points dari social_impacts 7 hari terakhir
+        const [impactRows] = await db.query(`
+            SELECT DAYOFWEEK(f.created_at) as dw, SUM(si.total_potential_points) as total
+            FROM social_impacts si
+            JOIN food_items f ON si.food_id = f.id
+            WHERE f.provider_id = ? AND f.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY dw
+        `, [userId]);
+        impactData = new Array(7).fill(0);
+        impactRows.forEach(r => { impactData[r.dw - 1] = Number(r.total); });
+
+    } else if (period === '30d') {
+        labels = ['M1', 'M2', 'M3', 'M4'];
+        const [pointRows] = await db.query(`
+            SELECT FLOOR(DATEDIFF(NOW(), created_at) / 7) as week_idx, SUM(amount) as total
+            FROM point_histories
+            WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            GROUP BY week_idx
+        `, [userId]);
+        pointsData = new Array(4).fill(0);
+        pointRows.forEach(r => {
+            const idx = 3 - Math.min(Math.floor(Number(r.week_idx)), 3);
+            pointsData[idx] += Number(r.total);
+        });
+
+        const [impactRows] = await db.query(`
+            SELECT FLOOR(DATEDIFF(NOW(), f.created_at) / 7) as week_idx, SUM(si.total_potential_points) as total
+            FROM social_impacts si
+            JOIN food_items f ON si.food_id = f.id
+            WHERE f.provider_id = ? AND f.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            GROUP BY week_idx
+        `, [userId]);
+        impactData = new Array(4).fill(0);
+        impactRows.forEach(r => {
+            const idx = 3 - Math.min(Math.floor(Number(r.week_idx)), 3);
+            impactData[idx] += Number(r.total);
+        });
+
+    } else if (period === '12m') {
+        labels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const [pointRows] = await db.query(`
+            SELECT MONTH(created_at) as m, SUM(amount) as total
+            FROM point_histories
+            WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+            GROUP BY m
+        `, [userId]);
+        pointsData = new Array(12).fill(0);
+        pointRows.forEach(r => { pointsData[r.m - 1] = Number(r.total); });
+
+        const [impactRows] = await db.query(`
+            SELECT MONTH(f.created_at) as m, SUM(si.total_potential_points) as total
+            FROM social_impacts si
+            JOIN food_items f ON si.food_id = f.id
+            WHERE f.provider_id = ? AND f.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+            GROUP BY m
+        `, [userId]);
+        impactData = new Array(12).fill(0);
+        impactRows.forEach(r => { impactData[r.m - 1] = Number(r.total); });
+    }
+
+    return { labels, pointsData, impactData };
+}
+
+async function getFoodRequests(receiverId) {
+    let query = `
+        SELECT fr.*, u.name as receiverName, u.avatar as receiverAvatar
+        FROM food_requests fr
+        JOIN users u ON fr.receiver_id = u.id
+    `;
+    const params = [];
+    if (receiverId) {
+        query += ' WHERE fr.receiver_id = ?';
+        params.push(receiverId);
+    } else {
+        query += ' WHERE fr.status = "ACTIVE"';
+    }
+    query += ' ORDER BY fr.posted_date DESC';
+    
+    const [rows] = await db.query(query, params);
+    return rows.map(r => ({
+        ...r,
+        postedDate: r.posted_date,
+        neededQuantity: r.needed_quantity
+    }));
+}
+
+async function addFoodRequest(data) {
+    const { receiverId, title, description, neededQuantity } = data;
+    const [result] = await db.query(
+        'INSERT INTO food_requests (receiver_id, title, description, needed_quantity, status) VALUES (?, ?, ?, ?, ?)',
+        [receiverId, title, description, neededQuantity, 'ACTIVE']
+    );
+    return { id: result.insertId, ...data, status: 'ACTIVE', postedDate: new Date() };
+}
+
+async function getPointHistory(userId) {
+    const [rows] = await db.query(
+        'SELECT * FROM point_histories WHERE user_id = ? ORDER BY created_at DESC',
+        [userId]
+    );
+    return rows.map(r => ({
+        ...r,
+        date: r.created_at,
+        type: r.activity_type
+    }));
 }
 
 app.listen(port, () => {

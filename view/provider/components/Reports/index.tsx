@@ -15,7 +15,6 @@ interface ReportsViewProps {
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigateToOrder, claims = [] }) => {
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [layoutMode, setLayoutMode] = useState<'list' | 'grid'>('grid');
 
   // Transform Claims with reports into Report objects
   const reports = useMemo(() => {
@@ -73,13 +72,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigateToOrder, cla
     <div className="space-y-6 animate-in fade-in">
        <ReportsHeader 
             count={reports.length} 
-            layoutMode={layoutMode} 
-            setLayoutMode={setLayoutMode} 
        />
 
-       <div className={`grid gap-3 md:gap-4 ${layoutMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2' : 'grid-cols-1'}`}>
+       <div className="flex flex-col gap-4">
           {currentReports.length === 0 && (
-              <div className="col-span-full">
+              <div className="py-10">
                 <EmptyState 
                     icon={CheckCircle}
                     title="Bebas Laporan"
@@ -91,7 +88,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigateToOrder, cla
             <ReportItemCard 
                 key={report.id} 
                 report={report} 
-                layoutMode={layoutMode} 
                 onClick={() => setSelectedReport(report)} 
             />
           ))}

@@ -221,13 +221,13 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
       ) || allAddresses.find(a => String(a.userId) === String(claim.receiverId));
 
       const receiverLocation = receiverAddressData ? {
-          lat: receiverAddressData.lat || -6.920000, 
-          lng: receiverAddressData.lng || 107.615000,
-          address: receiverAddressData.fullAddress
+          lat: receiverAddressData.lat || claim.receiverLocation?.lat || -6.920000, 
+          lng: receiverAddressData.lng || claim.receiverLocation?.lng || 107.615000,
+          address: receiverAddressData.fullAddress || claim.receiverLocation?.address || 'Alamat Penerima Belum Diisi'
       } : { 
-          lat: -6.920000, 
-          lng: 107.615000, 
-          address: 'Alamat Penerima Belum Diisi' 
+          lat: claim.receiverLocation?.lat || -6.920000, 
+          lng: claim.receiverLocation?.lng || 107.615000, 
+          address: claim.receiverLocation?.address || 'Alamat Penerima Belum Diisi' 
       };
 
       // --- 2. CARI ALAMAT DONATUR (PROVIDER) ---
@@ -238,7 +238,7 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
       const donorLocation = providerAddressData ? {
           lat: providerAddressData.lat || claim.location?.lat || -6.914744,
           lng: providerAddressData.lng || claim.location?.lng || 107.60981,
-          address: providerAddressData.fullAddress
+          address: providerAddressData.fullAddress || claim.location?.address || 'Alamat Donatur Tidak Ditemukan'
       } : {
           lat: claim.location?.lat || -6.914744,
           lng: claim.location?.lng || 107.60981,
@@ -251,7 +251,7 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
 
       let taskStatus: 'available' | 'active' | 'history' = 'available';
       if ((claim.status as string) === 'completed') taskStatus = 'history';
-      else if (claim.status?.toUpperCase() !== 'COMPLETED' && claim.courierName === userName) taskStatus = 'active';
+      else if (claim.status?.toUpperCase() !== 'COMPLETED' && currentUser?.id && claim.volunteerId && String(claim.volunteerId) === String(currentUser.id)) taskStatus = 'active';
 
       // Find FoodItem to get details like aiVerification
       const foodItem = inventory.find(f => String(f.id) === String(claim.foodId));
@@ -278,8 +278,8 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
       return {
           id: claim.id,
           claimId: claim.id,
-          from: providerAddressData ? providerAddressData.label : claim.providerName,
-          to: receiverAddressData ? receiverAddressData.label : (claim.receiverName || 'Penerima Manfaat'), 
+          from: claim.providerLocation?.label || claim.providerName,
+          to: claim.receiverLocation?.label || claim.receiverName || 'Penerima Manfaat', 
           distance: 2.5,
           distanceStr: '2.5 km',
           items: `${claim.foodName} (${claim.claimedQuantity || '1 Porsi'})`,
@@ -301,24 +301,24 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
   };
 
   const globalTasks: VolunteerTask[] = useMemo(() => {
+      if (!currentUser?.id) return [];
+
       return activeClaims
         .filter(claim => claim.deliveryMethod !== 'pickup') 
         .map(claim => {
-            const isAssignedToMe = claim.courierName === userName; 
-            const isUnassigned = !claim.courierName;
+            const isAssignedToMe = claim.volunteerId && String(claim.volunteerId) === String(currentUser.id);
+            const isUnassigned = !claim.volunteerId && !claim.courierName;
             
-            // Simplified logic to avoid type overlap issues with status check
-            if (isAssignedToMe) {
+            // Jika sudah diambil oleh SAYA atau masih KOSONG, baru tampilkan (untuk dipetakan)
+            if (isAssignedToMe || isUnassigned) {
                 return mapClaimToTask(claim);
             }
-            if (!isUnassigned) {
-                return null; 
-            }
             
-            return mapClaimToTask(claim);
+            // Jika sudah diambil RELAWAN LAIN (bukan saya & tidak kosong), jangan tampilkan sama sekali
+            return null;
         })
         .filter((t): t is VolunteerTask => t !== null); 
-  }, [activeClaims, userName, allAddresses, globalUsers, inventory]);
+  }, [activeClaims, currentUser, allAddresses, globalUsers, inventory]);
 
   const availableTasks = globalTasks.filter(t => t.status === 'available');
   const myActiveTasks = globalTasks.filter(t => t.status === 'active');

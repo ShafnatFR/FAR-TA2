@@ -21,13 +21,27 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ item, onClose, onSubmi
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setMedia(prev => [...prev, reader.result as string]);
-            };
-            reader.readAsDataURL(e.target.files[0]);
+        const file = e.target.files?.[0];
+        if (!file || !e.target.files) return;
+
+        if (media.length >= 5) {
+            alert('Maksimal 5 media per ulasan.');
+            return;
         }
+
+        const isVid = file.type.startsWith('video/');
+        const limit = isVid ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+        
+        if (file.size > limit) {
+            alert(`Ukuran file terlalu besar. Maksimal ${isVid ? '50MB untuk video' : '5MB untuk foto'}.`);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setMedia(prev => [...prev, reader.result as string]);
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleSubmit = async () => {
@@ -38,22 +52,22 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ item, onClose, onSubmi
         setIsSubmitting(true);
         
         try {
-            // Upload images to Drive (Review Folder)
             const uploadedUrls: string[] = [];
             for (const base64 of media) {
-                if (base64.startsWith('data:image')) {
-                    const url = await db.uploadImage(base64, `review_${item.id}_${Date.now()}.jpg`, 'reviews');
+                if (base64.startsWith('data:')) {
+                    const isVid = base64.startsWith('data:video');
+                    const ext = isVid ? 'mp4' : 'jpg';
+                    const url = await db.uploadImage(base64, `review_${item.id}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`, 'reviews');
                     uploadedUrls.push(url);
                 } else {
                     uploadedUrls.push(base64);
                 }
             }
 
-            // Submit logic handled by parent
             onSubmit(rating, review, uploadedUrls);
         } catch (error) {
             console.error("Failed to upload review media:", error);
-            alert("Gagal mengunggah foto ulasan. Tetap mengirim ulasan tanpa foto baru.");
+            alert("Gagal mengunggah media ulasan. Tetap mengirim ulasan tanpa media baru.");
             onSubmit(rating, review, []);
         } finally {
             setIsSubmitting(false);
@@ -104,9 +118,13 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ item, onClose, onSubmi
                 
                 <div className="mb-6">
                     <div className="flex gap-2 overflow-x-auto pb-2">
-                        {media.map((img, i) => (
-                            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 group">
-                                <img src={img} alt="review" className="w-full h-full object-cover" />
+                        {media.map((url, i) => (
+                            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 group bg-stone-100">
+                                {url.startsWith('data:video') ? (
+                                    <video src={url} className="w-full h-full object-cover" />
+                                ) : (
+                                    <img src={url} alt="review" className="w-full h-full object-cover" />
+                                )}
                                 <button 
                                     onClick={() => setMedia(media.filter((_, idx) => idx !== i))}
                                     className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -115,11 +133,13 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ item, onClose, onSubmi
                                 </button>
                             </div>
                         ))}
-                        <label className="w-16 h-16 rounded-lg border-2 border-dashed border-stone-300 dark:border-stone-700 flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors shrink-0">
-                            <Camera className="w-5 h-5 text-stone-400" />
-                            <span className="text-[8px] text-stone-400 font-bold uppercase mt-1">Tambah</span>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-                        </label>
+                        {media.length < 5 && (
+                            <label className="w-16 h-16 rounded-lg border-2 border-dashed border-stone-300 dark:border-stone-700 flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors shrink-0">
+                                <Camera className="w-5 h-5 text-stone-400" />
+                                <span className="text-[8px] text-stone-400 font-bold uppercase mt-1">Tambah</span>
+                                <input type="file" accept="image/*,video/*" className="hidden" onChange={handleFileChange} />
+                            </label>
+                        )}
                     </div>
                 </div>
 
@@ -144,13 +164,27 @@ export const ReportModal: React.FC<ReportModalProps> = ({ item, onClose, onSubmi
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setEvidence(prev => [...prev, reader.result as string]);
-            };
-            reader.readAsDataURL(e.target.files[0]);
+        const file = e.target.files?.[0];
+        if (!file || !e.target.files) return;
+
+        if (evidence.length >= 5) {
+            alert('Maksimal 5 media bukti per laporan.');
+            return;
         }
+
+        const isVid = file.type.startsWith('video/');
+        const limit = isVid ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+        
+        if (file.size > limit) {
+            alert(`Ukuran file terlalu besar. Maksimal ${isVid ? '50MB untuk video' : '5MB untuk foto'}.`);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setEvidence(prev => [...prev, reader.result as string]);
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleSubmit = async () => {
@@ -159,21 +193,21 @@ export const ReportModal: React.FC<ReportModalProps> = ({ item, onClose, onSubmi
         
         try {
             const uploadedUrls: string[] = [];
-            
-            // Upload Evidence to Drive (Report Folder)
-            for (const img of evidence) {
-                if (img.startsWith('data:image')) {
-                    const url = await db.uploadImage(img, `report_${item.id}_${Date.now()}.jpg`, 'reports');
+            for (const base64 of evidence) {
+                if (base64.startsWith('data:')) {
+                    const isVid = base64.startsWith('data:video');
+                    const ext = isVid ? 'mp4' : 'jpg';
+                    const url = await db.uploadImage(base64, `report_${item.id}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`, 'reports');
                     uploadedUrls.push(url);
                 } else {
-                    uploadedUrls.push(img);
+                    uploadedUrls.push(base64);
                 }
             }
             
             onSubmit(reason, description, uploadedUrls);
         } catch (error) {
             console.error("Failed to upload evidence:", error);
-            alert("Gagal mengunggah bukti foto. Laporan akan dikirim tanpa foto.");
+            alert("Gagal mengunggah media bukti. Laporan akan dikirim tanpa media.");
             onSubmit(reason, description, []);
         } finally {
             setIsSubmitting(false);
@@ -211,9 +245,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({ item, onClose, onSubmi
                     <div>
                         <label className="text-xs font-bold text-stone-500 mb-2 block uppercase">Bukti Foto (Opsional)</label>
                         <div className="flex gap-2 overflow-x-auto pb-2">
-                            {evidence.map((img, i) => (
-                                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 group border border-stone-200">
-                                    <img src={img} alt="evidence" className="w-full h-full object-cover" />
+                            {evidence.map((url, i) => (
+                                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 group border border-stone-200 bg-stone-100">
+                                    {url.startsWith('data:video') ? (
+                                        <video src={url} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <img src={url} alt="evidence" className="w-full h-full object-cover" />
+                                    )}
                                     <button 
                                         onClick={() => setEvidence(evidence.filter((_, idx) => idx !== i))}
                                         className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -222,11 +260,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({ item, onClose, onSubmi
                                     </button>
                                 </div>
                             ))}
-                            <label className="w-16 h-16 rounded-lg border-2 border-dashed border-stone-300 dark:border-stone-700 flex flex-col items-center justify-center cursor-pointer hover:border-red-500 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors shrink-0">
-                                <ImageIcon className="w-5 h-5 text-stone-400" />
-                                <span className="text-[8px] text-stone-400 font-bold uppercase mt-1">Tambah</span>
-                                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-                            </label>
+                            {evidence.length < 5 && (
+                                <label className="w-16 h-16 rounded-lg border-2 border-dashed border-stone-300 dark:border-stone-700 flex flex-col items-center justify-center cursor-pointer hover:border-red-500 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors shrink-0">
+                                    <ImageIcon className="w-5 h-5 text-stone-400" />
+                                    <span className="text-[8px] text-stone-400 font-bold uppercase mt-1">Tambah</span>
+                                    <input type="file" accept="image/*,video/*" className="hidden" onChange={handleFileChange} />
+                                </label>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -349,11 +389,11 @@ export const ClaimHistory: React.FC<ClaimHistoryProps> = ({
                                 <div className="flex-1">
                                     <div className="flex justify-between">
                                         <h4 className="font-bold text-stone-900 dark:text-white group-hover:text-orange-600 transition-colors">{item.foodName}</h4>
-                                        {item.status === 'completed' ? (
+                                        {item.status?.toLowerCase() === 'completed' ? (
                                             <span className="text-[10px] px-2 py-1 rounded-full font-bold uppercase bg-green-100 text-green-600 flex items-center gap-1">
                                                 <CheckCircle className="w-3 h-3" /> Selesai
                                             </span>
-                                        ) : item.status?.toUpperCase() === 'ACTIVE' || item.status?.toUpperCase() === 'PENDING' || item.status?.toUpperCase() === 'IN_PROGRESS' ? (
+                                        ) : ['active', 'pending', 'in_progress'].includes(item.status?.toLowerCase() || '') ? (
                                             <span className="text-[10px] px-2 py-1 rounded-full font-bold uppercase bg-blue-100 text-blue-600 flex items-center gap-1">
                                                 <Clock className="w-3 h-3" /> Aktif
                                             </span>
@@ -392,9 +432,13 @@ export const ClaimHistory: React.FC<ClaimHistoryProps> = ({
                             </div>
                             <div className="flex md:flex-col justify-end items-end gap-2 border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-4">
                                 <Button variant="outline" className="h-9 text-xs px-4" onClick={(e) => { e.stopPropagation(); onSelectItem(item); }}>Detail</Button>
-                                {item.status?.toUpperCase() === 'ACTIVE' || item.status?.toUpperCase() === 'PENDING' || item.status?.toUpperCase() === 'IN_PROGRESS' && <Button className="h-9 text-xs px-4" onClick={(e) => { e.stopPropagation(); setShowQr(item.uniqueCode || 'ERR'); }}><QrCode className="w-3 h-3 mr-1" /> Kode</Button>}
+                                {['active', 'pending', 'in_progress'].includes(item.status?.toLowerCase() || '') && (
+                                    <Button className="h-9 text-xs px-4" onClick={(e) => { e.stopPropagation(); setShowQr(item.uniqueCode || 'ERR'); }}>
+                                        <QrCode className="w-3 h-3 mr-1" /> Kode
+                                    </Button>
+                                )}
                                 
-                                {(item.status?.toUpperCase() === 'COMPLETED' || item.status?.toUpperCase() === 'ACTIVE' || item.status?.toUpperCase() === 'PENDING' || item.status?.toUpperCase() === 'IN_PROGRESS') && (
+                                {['active', 'pending', 'in_progress', 'completed'].includes(item.status?.toLowerCase() || '') && (
                                     <div className="flex gap-2">
                                         {item.status === 'completed' && !item.rating && (
                                             <Button variant="outline" className="h-9 text-xs" onClick={(e) => { e.stopPropagation(); setReviewItem(item); }}><MessageSquare className="w-3 h-3" /> Ulas</Button>

@@ -8,25 +8,23 @@ import { RankDetailsModal } from './RankDetailsModal';
 
 interface DashboardStatsProps {
     setActiveTab: (t: any) => void;
+    userId: string; // NEW: pass userId for chart data fetching
     stats: {
         totalPoints: number;
-        co2Saved: number;
+        totalPotentialPoints: number;
         activeStock: number;
         completedOrders: number;
         pendingReports: number;
         avgRating: number;
     };
-    weeklyPoints: number[]; // Receive real data
-    weeklyCo2: number[];    // Receive real data
 }
 
-export const DashboardStats: React.FC<DashboardStatsProps> = ({setActiveTab, stats, weeklyPoints, weeklyCo2}) => {
+export const DashboardStats: React.FC<DashboardStatsProps> = ({setActiveTab, stats, userId}) => {
   const [showRankDetails, setShowRankDetails] = useState(false);
   
   const providerSystem = SOCIAL_SYSTEM.provider;
   const currentPoints = stats.totalPoints;
   
-  // Logic to determine current and next rank
   const currentRank = providerSystem.tiers.slice().reverse().find(t => currentPoints >= t.minPoints) || providerSystem.tiers[0];
   const nextRank = providerSystem.tiers.find(t => t.minPoints > currentPoints);
   const progress = nextRank 
@@ -44,18 +42,21 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({setActiveTab, sta
         onShowDetails={() => setShowRankDetails(true)}
       />
 
-      <QuickActions 
-        setActiveTab={setActiveTab}
-        pendingReports={stats.pendingReports}
-        avgRating={stats.avgRating}
-      />
+      <div className="space-y-4">
+        <QuickActions 
+            setActiveTab={setActiveTab}
+            pendingReports={stats.pendingReports}
+            avgRating={stats.avgRating}
+        />
 
-      <StatsGrid 
-        stats={{ totalPoints: currentPoints, co2Saved: stats.co2Saved }}
-        weeklyPoints={weeklyPoints}
-        weeklyCo2={weeklyCo2}
-        providerSystem={providerSystem}
-      />
+        <StatsGrid 
+            stats={{ 
+                totalPoints: currentPoints, 
+                totalPotentialPoints: stats.totalPotentialPoints || 0 
+            }}
+            userId={userId}
+        />
+      </div>
 
       {showRankDetails && (
         <RankDetailsModal 

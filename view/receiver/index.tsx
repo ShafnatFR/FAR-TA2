@@ -4,6 +4,7 @@ import { FoodItem, SavedItem, ClaimHistoryItem, UserData } from '../../types';
 import { FoodList } from './components/FoodList';
 import { FoodDetail } from './components/FoodDetail';
 import { SuccessClaimSplash } from '../common/SuccessClaimSplash';
+import { RequestManager } from './components/RequestManager';
 
 interface ReceiverIndexProps {
   onOpenNotifications: () => void;
@@ -16,6 +17,7 @@ interface ReceiverIndexProps {
   currentUser?: UserData | null; 
   isLoading?: boolean;
   onRefresh?: () => void;
+  disableExpiryLogic?: boolean;
 }
 
 export const ReceiverIndex: React.FC<ReceiverIndexProps> = ({ 
@@ -28,9 +30,12 @@ export const ReceiverIndex: React.FC<ReceiverIndexProps> = ({
   claimHistory = [],
   currentUser,
   isLoading: isGlobalLoading = false, // Default to false if not provided
-  onRefresh
+  onRefresh,
+  disableExpiryLogic = false
 }) => {
   const [selectedItem, setSelectedItem] = useState<FoodItem | null>(null);
+  const [showRequests, setShowRequests] = useState(false);
+  
   // Merge internal loading logic (from previous impl) with global loading
   const [isMounting, setIsMounting] = useState(true);
   
@@ -78,7 +83,12 @@ export const ReceiverIndex: React.FC<ReceiverIndexProps> = ({
 
   return (
     <>
-        {selectedItem ? (
+        {showRequests ? (
+            <RequestManager 
+                currentUser={currentUser} 
+                onBack={() => setShowRequests(false)} 
+            />
+        ) : selectedItem ? (
             <FoodDetail 
                 item={selectedItem} 
                 onBack={() => setSelectedItem(null)} 
@@ -92,11 +102,13 @@ export const ReceiverIndex: React.FC<ReceiverIndexProps> = ({
             <FoodList 
                 onOpenNotifications={onOpenNotifications} 
                 onSelectItem={setSelectedItem} 
+                onOpenRequests={() => setShowRequests(true)}
                 foodItems={foodItems} 
                 savedIds={new Set(savedItems.map(s => s.id))}
                 onToggleSave={onToggleSave}
                 isLoading={isLoading}
                 onRefresh={onRefresh}
+                disableExpiryLogic={disableExpiryLogic}
             />
         )}
 
