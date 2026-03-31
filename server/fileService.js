@@ -22,7 +22,11 @@ const sharp = require('sharp');
  */
 async function uploadToFileSystem(base64Data, filename, targetFolder = 'fotoProfil') {
     try {
-        const uploadDir = path.join(ASSETS_DIR, targetFolder);
+        // Prevent Path Traversal
+        const safeFolder = path.basename(targetFolder);
+        const safeFilename = path.basename(filename);
+        
+        const uploadDir = path.join(ASSETS_DIR, safeFolder);
         
         // Ensure the target subfolder exists
         if (!fs.existsSync(uploadDir)) {
@@ -33,7 +37,14 @@ async function uploadToFileSystem(base64Data, filename, targetFolder = 'fotoProf
         const mimeType = (base64Parts[0].match(/:(.*?);/)?.[1]) || 'image/jpeg';
         const base64Content = base64Parts[1] || base64Data;
         const buffer = Buffer.from(base64Content, 'base64');
-        const filePath = path.join(uploadDir, filename);
+        const filePath = path.join(uploadDir, safeFilename);
+        
+        // Double check it's within ASSETS_DIR
+        const resolvedPath = path.resolve(filePath);
+        const resolvedAssetsPath = path.resolve(ASSETS_DIR);
+        if (!resolvedPath.startsWith(resolvedAssetsPath)) {
+            throw new Error('Path traversal detected');
+        }
         
         if (mimeType.startsWith('image/')) {
             // Sharp processing: Resize to max 1200x1200px and compress to JPEG (quality 80)
@@ -54,10 +65,10 @@ async function uploadToFileSystem(base64Data, filename, targetFolder = 'fotoProf
         } else {
             // For videos and other binary files, save directly
             fs.writeFileSync(filePath, buffer);
-            console.log(`[FILE] Binary file saved directly: ${filename} (${(buffer.length / 1024 / 1024).toFixed(2)}MB)`);
+            console.log(`[FILE] Binary file saved directly: ${safeFilename} (${(buffer.length / 1024 / 1024).toFixed(2)}MB)`);
         }
 
-        return `/assets/${targetFolder}/${filename}`;
+        return `/assets/${safeFolder}/${safeFilename}`;
     } catch (error) {
         console.error('File Upload Error:', error);
         throw error;
@@ -70,25 +81,40 @@ async function uploadToFileSystem(base64Data, filename, targetFolder = 'fotoProf
 async function deleteFile(fileUrl) {
     if (!fileUrl) return;
     
-    // Extract the relative path. e.g. from "http://localhost:5000/assets/fotoProfil/xyz.jpg" to "/assets/fotoProfil/xyz.jpg"
+    // Prevent SSRF by extracting path manually instead of relying on URL constructor
     let relativePath = fileUrl;
-    try {
-        if (fileUrl.startsWith('http')) {
-            const urlObj = new URL(fileUrl);
-            relativePath = urlObj.pathname;
+    if (fileUrl.startsWith('http')) {
+        const match = fileUrl.match(/^https?:\/\/[^\/]+(\/.*)$/);
+        if (match && match[1]) {
+            relativePath = match[1];
+        } else {
+            return; // Invalid URL structure
         }
-    } catch (e) {
-        // Fallback if parsing fails
     }
 
     if (!relativePath.startsWith('/assets/')) return;
     
     try {
-        const cleanPath = relativePath.replace('/assets/', '');
+        // Strip out only the prefix, and forbid directory climbing
+        const cleanPath = relativePath.slice('/assets/'.length); 
+        if (cleanPath.includes('..')) {
+            console.warn(`[FILE] Path traversal attempt in deleteFile: ${cleanPath}`);
+            return;
+        }
+
         const filePath = path.join(ASSETS_DIR, cleanPath);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            console.log(`[FILE] Deleted old asset: ${filePath}`);
+        
+        // Secondary bounds check
+        const resolvedPath = path.resolve(filePath);
+        const resolvedAssetsPath = path.resolve(ASSETS_DIR);
+        if (!resolvedPath.startsWith(resolvedAssetsPath)) {
+            console.warn(`[FILE] Deletion resolved outside ASSETS_DIR: ${resolvedPath}`);
+            return;
+        }
+
+        if (fs.existsSync(resolvedPath)) {
+            fs.unlinkSync(resolvedPath);
+            console.log(`[FILE] Deleted old asset: ${resolvedPath}`);
         }
     } catch (error) {
         console.error(`[FILE] Failed to delete old asset: ${fileUrl}`, error);

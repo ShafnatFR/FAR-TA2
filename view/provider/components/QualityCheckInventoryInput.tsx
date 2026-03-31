@@ -4,7 +4,7 @@ import { ArrowRight, Upload, Sparkles, Timer, Weight, ShoppingBag, MapPin } from
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { DeliveryMethod, Address } from '../../../types';
-import { analyzeFoodQuality } from '../../../services/ai';
+import { db } from '../../../services/db';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -83,17 +83,16 @@ export const QualityCheckInventoryInput: React.FC<QualityCheckInventoryInputProp
     try {
         const qtyNum = parseFloat(form.quantity) || 1;
         const weightNum = parseFloat(form.weightPerUnit) || 500;
-        
+
         // Hitung total berat batch
-        const totalWeightGram = form.quantityUnit === 'Gram' 
-            ? qtyNum 
+        const totalWeightGram = form.quantityUnit === 'Gram'
+            ? qtyNum
             : qtyNum * weightNum;
 
         // Tentukan jumlah porsi untuk perhitungan rata-rata
         const portionCount = form.quantityUnit === 'Gram' ? 1 : qtyNum;
 
-        // MENGIRIM SELURUH KONTEKS WAKTU UNTUK ANALISIS MIKROBIOLOGI AI
-        const result = await analyzeFoodQuality(["Makanan"], img, {
+        const analysisContext = {
             foodName: form.name,
             ingredients: form.ingredients,
             madeTime: form.madeDateTime,
@@ -101,13 +100,41 @@ export const QualityCheckInventoryInput: React.FC<QualityCheckInventoryInputProp
             weightGram: totalWeightGram,
             packagingType: form.packaging,
             distributionStart: form.distributionStart,
-            quantityCount: portionCount // Pass quantity count
-        });
-        
+            quantityCount: portionCount
+        };
+
+        // === DEBUG: AI ANALYSIS START ===
+        console.group('[AI] 🔍 Memulai Analisis Kualitas Makanan (via Backend)');
+        console.log('[AI] 📋 Konteks:', analysisContext);
+        console.log('[AI] 🖼️  Gambar tersedia:', img ? 'Ya (base64 length: ' + img.length + ')' : 'Tidak');
+        console.groupEnd();
+        // === END DEBUG ===
+
+        // PANGGIL BACKEND — backend menghubungi Gemini (menghindari CORS)
+        const result = await db.analyzeFood(["Makanan"], img, analysisContext);
+
+        // === DEBUG: AI ANALYSIS RESULT ===
+        console.group('[AI] ✅ Hasil Analisis AI Diterima dari Backend');
+        console.log('[AI] isSafe:', result.isSafe);
+        console.log('[AI] qualityPercentage:', result.qualityPercentage, '%');
+        console.log('[AI] hygieneScore:', result.hygieneScore);
+        console.log('[AI] halalScore:', result.halalScore);
+        console.log('[AI] reasoning:', result.reasoning);
+        console.log('[AI] shelfLifePrediction:', result.shelfLifePrediction);
+        console.log('[AI] detectedItems:', result.detectedItems);
+        console.log('[AI] socialImpact:', result.socialImpact);
+        console.groupEnd();
+        // === END DEBUG ===
+
         onAnalysisComplete(result, img, form);
-    } catch (err) {
-        console.error(err);
-        alert("Gagal menganalisis. Silakan coba lagi.");
+    } catch (err: any) {
+        // === DEBUG: AI ANALYSIS ERROR ===
+        console.group('[AI] ❌ ERROR Analisis Gagal');
+        console.error('[AI] Error:', err);
+        console.log('[AI] 💡 Pastikan server/backend berjalan dan GEMINI_API_KEY ada di server/.env');
+        console.groupEnd();
+        // === END DEBUG ===
+        alert(`Gagal menganalisis: ${err.message}`);
         setStep('upload');
     }
   };

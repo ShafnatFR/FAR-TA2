@@ -14,7 +14,7 @@ export interface ImpactBreakdownItem {
   result: number; // Result per portion
   category: string;
 }
-
+  
 export interface DetailedSocialImpact extends SocialImpactData {
   co2Breakdown: ImpactBreakdownItem[];
   socialBreakdown: ImpactBreakdownItem[];
@@ -40,8 +40,8 @@ export interface QualityAnalysisResult {
 
 const getAI = () => {
   // Gunakan import.meta.env untuk Vite
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
-  return new GoogleGenAI({ apiKey: apiKey || '', apiVersion: 'v1' });
+  const apiKey = "AIzaSyAZdiUhA49KL7s7Egj-QzO2AZ3yB6GDO9M";
+  return new GoogleGenAI({ apiKey: apiKey || '' });
 };
 
 // Faktor Emisi CO2e per Kg (LCA Standard Approximation)
@@ -174,17 +174,26 @@ export const analyzeFoodQuality = async (
     quantityCount?: number; // Tambahan parameter jumlah porsi
   }
 ): Promise<QualityAnalysisResult> => {
+  const REQUEST_ID = Math.random().toString(36).substring(2, 8);
   try {
     const ai = getAI();
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+    console.group(`[AI SERVICE] 🔵 Request #${REQUEST_ID} — analyzeFoodQuality()`);
+    console.log(`[AI SERVICE] API Key tersedia: ${apiKey ? 'Ya ✅ (length: ' + apiKey.length + ')' : 'TIDAK ❌'}`);
+    console.log(`[AI SERVICE] Model digunakan: gemini-1.5-flash`);
+    console.log(`[AI SERVICE] Input labels:`, inputLabels);
+    console.log(`[AI SERVICE] Image provided: ${imageBase64 ? 'Ya (length: ' + imageBase64.length + ')' : 'Tidak'}`);
+    console.log(`[AI SERVICE] Context:`, context);
 
     // Log daftar model yang TERSEDIA untuk API Key Anda
     try {
       const result = await ai.models.list();
       // Mengambil nama model dari hasil list
       const modelNames = (result as any).pageInternal?.map((m: any) => m.name) || [];
-      console.log("%c[AI SERVICE] Model yang bisa Anda gunakan:", "color: cyan; font-weight: bold;", modelNames);
+      console.log("[AI SERVICE] Available models:", modelNames);
     } catch (e) {
-      console.log("[AI SERVICE] Gagal melist model, lanjut ke analisis...");
+      console.warn("[AI SERVICE] Gagal melist model, lanjut ke analisis...");
     }
 
     const parts: any[] = [];
@@ -231,36 +240,36 @@ export const analyzeFoodQuality = async (
       }
     `;
 
-// services/ai.ts
+    // services/ai.ts
 
-const schema = {
-  type: Type.OBJECT, // Gunakan enum Type, bukan string "OBJECT"
-  properties: {
-    isSafe: { type: Type.BOOLEAN },
-    isHalal: { type: Type.BOOLEAN },
-    halalScore: { type: Type.INTEGER },
-    reasoning: { type: Type.STRING },
-    hygieneScore: { type: Type.INTEGER },
-    qualityPercentage: { type: Type.INTEGER },
-    detectedItems: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          name: { type: Type.STRING },
-          category: { type: Type.STRING }
+    const schema = {
+      type: Type.OBJECT, // Gunakan enum Type, bukan string "OBJECT"
+      properties: {
+        isSafe: { type: Type.BOOLEAN },
+        isHalal: { type: Type.BOOLEAN },
+        halalScore: { type: Type.INTEGER },
+        reasoning: { type: Type.STRING },
+        hygieneScore: { type: Type.INTEGER },
+        qualityPercentage: { type: Type.INTEGER },
+        detectedItems: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              category: { type: Type.STRING }
+            },
+            required: ["name", "category"]
+          }
         },
-        required: ["name", "category"]
-      }
-    },
-    shelfLifePrediction: { type: Type.STRING },
-    storageTips: { type: Type.ARRAY, items: { type: Type.STRING } }
-  },
-  required: ["isSafe", "qualityPercentage", "detectedItems"]
-};
+        shelfLifePrediction: { type: Type.STRING },
+        storageTips: { type: Type.ARRAY, items: { type: Type.STRING } }
+      },
+      required: ["isSafe", "qualityPercentage", "detectedItems"]
+    };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash', // Model paling stabil di v1
+      model: 'gemini-2.5-flash', // Model paling stabil di v1
       contents: [
         {
           role: 'user',
@@ -275,6 +284,12 @@ const schema = {
 
     const aiResult = JSON.parse(response.text || '{}');
 
+    // === DEBUG: Gemini API Response ===
+    console.log(`[AI SERVICE] ✅ Gemini API Response #${REQUEST_ID}`);
+    console.log(`[AI SERVICE] Raw response text length: ${(response.text || '').length}`);
+    console.log(`[AI SERVICE] Parsed result:`, aiResult);
+    // === END DEBUG ===
+
     // Kalkulasi Dampak Mendetail (Updated Logic)
     const socialImpact = calculateDetailedImpact(
       aiResult.detectedItems || [],
@@ -283,13 +298,26 @@ const schema = {
       context?.quantityCount || 1 // Pass quantity count
     );
 
-    return {
+    const finalResult = {
       ...aiResult,
       detectedCategory: aiResult.detectedItems?.[0]?.category || 'Lainnya',
       socialImpact
     };
+
+    console.log(`[AI SERVICE] ✅ Analisis BERHASIL #${REQUEST_ID} — returning result`);
+    console.groupEnd();
+
+    return finalResult;
   } catch (error: any) {
-    console.error("AI Analysis Error:", error);
+    // === DEBUG: Fallback Mode ===
+    console.warn(`[AI SERVICE] ⚠️  GEMINI API ERROR #${REQUEST_ID} — Menggunakan FALLBACK`);
+    console.warn(`[AI SERVICE] Error message:`, error?.message || error);
+    console.warn(`[AI SERVICE] Kemungkinan penyebab:`);
+    console.warn(`  - API Key tidak valid atau tidak terisi`);
+    console.warn(`  - Kuota API Gemini tercapai`);
+    console.warn(`  - Koneksi internet bermasalah`);
+    console.groupEnd();
+    // === END DEBUG ===
     // Fallback Result
     const fallbackItems: DetectedItem[] = [{ name: context?.foodName || "Makanan", category: "Lainnya" }];
     const fallbackImpact = calculateDetailedImpact(

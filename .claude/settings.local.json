@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const p = require\\(''./node_modules/@google/genai/package.json''\\); console.log\\(p.name, p.version\\)\")",
+      "Bash(node -e \"const { GoogleGenAI, Type } = require\\(''@google/genai''\\); const ai = new GoogleGenAI\\({ apiKey: ''test'' }\\); console.log\\(Object.keys\\(ai\\)\\); console.log\\(typeof ai.models\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(node -e \"const p = require\\(''''./node_modules/@google/cloud-gax/build/src/util.js''''\\); console.log\\(''''ok''''\\)\")",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const { GoogleGenAI, Type } = require\\(''@google/genai''\\); console.log\\(''OK, Type:'', Type.OBJECT, Type.STRING\\)\")",
+      "Bash(grep '\"\"version\"\"' D:/FAR-TA2/server/node_modules/@google/genai/package.json)",
+      "Bash(grep '\"\"version\"\"' D:/FAR-TA2/node_modules/@google/genai/package.json)",
+      "Bash(node test_gemini.cjs)"
+    ]
+  }
+}

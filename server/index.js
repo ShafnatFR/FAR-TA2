@@ -4,6 +4,10 @@ const cors = require('cors');
 const path = require('path');
 const db = require('./db');
 require('dotenv').config();
+const { GoogleGenAI } = require('@google/genai');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'FALLBACK_SECRET_KEY_123';
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -21,17 +25,30 @@ app.post('/api', async (req, res) => {
     const { action, data } = req.body;
     console.log(`[ACTION] ${action}`);
 
+    if (action !== 'LOGIN_USER' && action !== 'REGISTER_USER') {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ status: 'error', message: 'Unauthorized: Missing or invalid token' });
+        }
+        try {
+            const token = authHeader.split(' ')[1];
+            req.user = jwt.verify(token, JWT_SECRET);
+        } catch (err) {
+            return res.status(401).json({ status: 'error', message: 'Unauthorized: Token verification failed' });
+        }
+    }
+
     try {
         let result;
         switch (action) {
-            case 'REGISTER_USER': result = await registerUser(data); break;
+            case 'REGISTER_USER': result = await registerUser(data, req.user); break;
             case 'LOGIN_USER': result = await loginUser(data); break;
-            case 'GET_USERS': 
-                const users = await getAllData('users'); 
-                result = users.map(u => ({ ...u, joinDate: u.created_at || new Date().toISOString() })); 
+            case 'GET_USERS':
+                const users = await getAllData('users');
+                result = users.map(u => ({ ...u, joinDate: u.created_at || new Date().toISOString() }));
                 break;
-            case 'UPSERT_USER': result = await upsertUser(data); break;
-            
+            case 'UPSERT_USER': result = await upsertUser(data, req.user); break;
+
             case 'GET_ADDRESSES': result = await getAddresses(data.userId); break;
             case 'ADD_ADDRESS': result = await addAddress(data); break;
             case 'UPDATE_ADDRESS': result = await updateAddress(data); break;
@@ -54,16 +71,16 @@ app.post('/api', async (req, res) => {
             case 'GET_FAQS': result = await getAllData('faqs'); break;
             case 'GET_NOTIFICATIONS': result = await getAllData('notifications'); break;
             case 'SEND_BROADCAST': result = await sendBroadcast(data); break;
-            
+
             case 'GET_SETTINGS': result = appSettings; break;
-            case 'UPDATE_SETTINGS': 
+            case 'UPDATE_SETTINGS':
                 appSettings = { ...appSettings, ...data };
-                result = appSettings; 
+                result = appSettings;
                 break;
 
             case 'GET_SOCIAL_IMPACT': result = await getSocialImpact(data.userId); break;
             case 'GET_IMPACT_CHART': result = await getImpactChart(data.userId, data.period); break;
-            
+
             case 'GET_FOOD_REQUESTS': result = await getFoodRequests(data.receiverId); break;
             case 'ADD_FOOD_REQUEST': result = await addFoodRequest(data); break;
             case 'DELETE_FOOD_REQUEST': result = await deleteData('food_requests', data.id); break;
@@ -71,11 +88,14 @@ app.post('/api', async (req, res) => {
             case 'GET_POINT_HISTORY': result = await getPointHistory(data.userId); break;
             case 'GET_BADGES': result = await getAllData('badges'); break;
 
-            case 'UPLOAD_IMAGE': 
+            case 'ANALYZE_FOOD':
+                result = await analyzeFood(data);
+                break;
+
+            case 'UPLOAD_IMAGE':
                 const { uploadToFileSystem } = require('./fileService');
-                const targetFolder = data.folderType || 'fotoProfil'; 
-                const filePath = await uploadToFileSystem(data.base64, data.filename, targetFolder); 
-                // Return full URL (assuming backend is on same host)
+                const targetFolder = data.folderType || 'fotoProfil';
+                const filePath = await uploadToFileSystem(data.base64, data.filename, targetFolder);
                 result = `http://localhost:${port}${filePath}`;
                 break;
 
@@ -103,17 +123,31 @@ const mapRole = (role) => ROLE_MAP[role] || role;
 
 // --- IMPLEMENTATIONS ---
 
-async function registerUser(data) {
+async function registerUser(data, reqUser) {
     const { name, email, password, role, phone, avatar } = data;
+    const mappedRole = mapRole(role);
+
+    // Prevent Role Self-Assignment Vulnerability (AUTH-VULN-03)
+    if (['ADMIN', 'SUPER_ADMIN'].includes(mappedRole)) {
+        if (!reqUser || !['admin_manager', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(reqUser.role)) {
+            throw new Error('Pendaftaran role Admin tidak diizinkan melalui public API.');
+        }
+    }
+
     // Check if email exists
     const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
     if (existing.length > 0) throw new Error('Email ini sudah terdaftar.');
 
     const [result] = await db.query(
         'INSERT INTO users (name, email, password, role, phone, avatar, points, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, email, password, mapRole(role), phone, avatar, 0, 'ACTIVE']
+        [name, email, password, mappedRole, phone, avatar, 0, 'ACTIVE']
     );
-    return { id: result.insertId, ...data, isNewUser: true, status: 'ACTIVE', points: 0 };
+    
+    // Generate token
+    const userPayload = { id: result.insertId, email, role: mappedRole };
+    const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
+
+    return { id: result.insertId, ...data, isNewUser: true, status: 'ACTIVE', points: 0, token };
 }
 
 async function loginUser(data) {
@@ -125,8 +159,11 @@ async function loginUser(data) {
     // Reverse map role if needed for frontend
     const reverseRole = Object.keys(ROLE_MAP).find(key => ROLE_MAP[key] === user.role);
     if (reverseRole) user.role = reverseRole;
-    user.isNewUser = true; 
-    return user;
+    user.isNewUser = true;
+    
+    // Generate session token
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    return { ...user, token };
 }
 
 async function getAllData(table) {
@@ -134,9 +171,15 @@ async function getAllData(table) {
     return rows;
 }
 
-async function upsertUser(data) {
+async function upsertUser(data, reqUser) {
     const { id, syncAddressIds, ...fields } = data;
     if (id) {
+        // Enforce authorization to prevent Account Takeover (AUTH-VULN-10)
+        if (!reqUser) throw new Error("Unauthorized");
+        if (String(reqUser.id) !== String(id) && !['admin_manager', 'super_admin', 'ADMIN', 'SUPER_ADMIN'].includes(reqUser.role)) {
+            throw new Error("Unauthorized to modify this user account.");
+        }
+
         // 1. Fetch current data for comparison
         const [oldUsers] = await db.query('SELECT name, phone, avatar FROM users WHERE id = ?', [id]);
         const oldUser = oldUsers[0];
@@ -202,7 +245,7 @@ async function upsertUser(data) {
         }
         return data;
     } else {
-        return registerUser(data);
+        return registerUser(data, reqUser);
     }
 }
 
@@ -303,7 +346,7 @@ async function getInventory(providerId) {
             co2Saved: item.co2Saved,
             waterSaved: item.waterSaved,
             landSaved: item.landSaved,
-            wasteReduction: item.co2Saved ? parseFloat((item.co2Saved * 0.45).toFixed(2)) : 0, 
+            wasteReduction: item.co2Saved ? parseFloat((item.co2Saved * 0.45).toFixed(2)) : 0,
             impactDetails: item.impactDetails ? (typeof item.impactDetails === 'string' ? JSON.parse(item.impactDetails) : item.impactDetails) : []
         } : null
     }));
@@ -383,7 +426,7 @@ async function getClaims(providerId, receiverId) {
         uniqueCode: c.unique_code,
         isScanned: !!c.is_scanned,
         date: c.created_at, // Mapping for frontend
-        receiverName: c.rec_contact || c.receiverName, 
+        receiverName: c.rec_contact || c.receiverName,
         receiverPhone: c.rec_phone || c.receiverPhone,
         donorPhone: c.prov_phone || c.donorPhone,
         providerName: c.providerName,
@@ -400,13 +443,13 @@ async function getClaims(providerId, receiverId) {
         reportEvidence: (() => {
             if (!c.reportEvidence) return [];
             if (typeof c.reportEvidence !== 'string') return c.reportEvidence;
-            try { 
+            try {
                 const parsed = JSON.parse(c.reportEvidence);
                 return Array.isArray(parsed) ? parsed : [parsed];
-            } catch (e) { 
+            } catch (e) {
                 // If it's a comma-separated string or just one URL
                 if (c.reportEvidence.includes(',')) return c.reportEvidence.split(',').map(s => s.trim());
-                return [c.reportEvidence]; 
+                return [c.reportEvidence];
             }
         })(),
         reportStatus: c.reportStatus || null,
@@ -449,7 +492,7 @@ async function updateClaimStatus(id, status, additionalData) {
     // Map 'active' from frontend to 'IN_PROGRESS' for DB enum
     let dbStatus = status ? status.toUpperCase() : 'PENDING';
     if (dbStatus === 'ACTIVE') dbStatus = 'IN_PROGRESS';
-    
+
     // Ensure it's one of the valid ENUM values
     const validStatuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
     if (!validStatuses.includes(dbStatus)) {
@@ -499,9 +542,9 @@ async function submitReview(data) {
     const { claimId, rating, review, reviewMedia } = data;
     const [claim] = await db.query('SELECT * FROM claims WHERE id = ?', [claimId]);
     if (claim.length === 0) throw new Error('Claim not found');
-    
+
     const [food] = await db.query('SELECT provider_id FROM food_items WHERE id = ?', [claim[0].food_id]);
-    
+
     await db.query(
         'INSERT INTO reviews (claim_id, user_id, partner_id, food_id, rating, comment, review_media) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [claimId, claim[0].receiver_id, food[0].provider_id, claim[0].food_id, rating, review, JSON.stringify(reviewMedia)]
@@ -579,7 +622,7 @@ async function getSocialImpact(userId) {
         WHERE f.provider_id = ?
     `, [userId]);
     const totalPotentialPoints = potentialRows[0]?.total || 0;
-    
+
     return {
         totalCo2: parseFloat((Number(impact.totalCo2) || 0).toFixed(2)),
         totalWater: parseFloat((Number(impact.totalWater) || 0).toFixed(2)),
@@ -684,7 +727,7 @@ async function getFoodRequests(receiverId) {
         query += ' WHERE fr.status = "ACTIVE"';
     }
     query += ' ORDER BY fr.posted_date DESC';
-    
+
     const [rows] = await db.query(query, params);
     return rows.map(r => ({
         ...r,
@@ -712,6 +755,154 @@ async function getPointHistory(userId) {
         date: r.created_at,
         type: r.activity_type
     }));
+}
+
+// === GEMINI AI ANALYSIS ===
+const GEMINI_EMISSION_FACTORS = {
+    'Daging Merah': 20.0,
+    'Unggas & Telur': 6.0,
+    'Ikan & Seafood': 4.0,
+    'Karbohidrat': 3.5,
+    'Sayur & Buah': 1.5,
+    'Lainnya': 0.5
+};
+
+const GEMINI_SOCIAL_FACTORS = {
+    'Daging Merah': 150,
+    'Unggas & Telur': 100,
+    'Ikan & Seafood': 120,
+    'Karbohidrat': 50,
+    'Sayur & Buah': 60,
+    'Lainnya': 10
+};
+
+async function analyzeFood(data) {
+    const { inputLabels, imageBase64, context } = data;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+
+    console.log(`[ANALYZE_FOOD] API Key tersedia: ${apiKey ? 'Ya (length: ' + apiKey.length + ')' : 'TIDAK ❌'}`);
+
+    if (!apiKey) {
+        throw new Error('GEMINI_API_KEY tidak dikonfigurasi di server/.env');
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    const parts = [];
+    if (imageBase64) {
+        const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+        parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
+    }
+
+    const prompt = `
+      Anda adalah Senior Food Safety Auditor & Environmental Analyst.
+
+      DATA INPUT:
+      - Nama: ${context?.foodName}
+      - Bahan: ${context?.ingredients}
+      - Waktu Masak: ${context?.madeTime}
+      - Berat Total: ${context?.weightGram} gram
+
+      TUGAS 1: Klasifikasikan bahan-bahan utama yang terlihat atau tertulis ke dalam kategori LCA (Life Cycle Assessment) berikut:
+      - 'Daging Merah' (Sapi, Kambing)
+      - 'Unggas & Telur' (Ayam, Bebek, Telur)
+      - 'Ikan & Seafood'
+      - 'Karbohidrat' (Nasi, Roti, Mie, Kentang)
+      - 'Sayur & Buah'
+      - 'Lainnya' (Bumbu, Kuah, Tahu/Tempe masuk sini)
+
+      TUGAS 2: Audit Keamanan Pangan (Microbiology Risk).
+      - Analisis selisih waktu masak vs distribusi.
+      - Berikan skor 'qualityPercentage' (0-100). Di bawah 70 = REJECT.
+
+      OUTPUT JSON (Strict Type):
+      {
+        "isSafe": boolean,
+        "isHalal": boolean,
+        "halalScore": integer (0-100),
+        "reasoning": string,
+        "hygieneScore": integer (0-100),
+        "qualityPercentage": integer (0-100),
+        "detectedItems": [
+           { "name": "Nama Bahan (misal: Nasi Putih)", "category": "Karbohidrat" },
+           { "name": "Nama Bahan (misal: Ayam Goreng)", "category": "Unggas & Telur" }
+        ],
+        "shelfLifePrediction": string (e.g. "3 Jam"),
+        "storageTips": [string]
+      }
+    `;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }, ...parts] }],
+        config: {
+            responseMimeType: "application/json"
+        }
+    });
+
+    // Parse JSON from text response — model returns clean JSON by default
+    let rawText = (response.text || '').trim();
+    rawText = rawText.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+    const aiResult = JSON.parse(rawText);
+    console.log('[ANALYZE_FOOD] ✅ Gemini response received:', JSON.stringify(aiResult).substring(0, 200));
+
+    // Calculate social impact (mirrored from frontend services/ai.ts)
+    const detectedItems = aiResult.detectedItems || [];
+    const totalWeightKg = (context?.weightGram || 500) / 1000;
+    const portionCount = context?.quantityCount || 1;
+    const weightPerPortionKg = totalWeightKg / portionCount;
+    const packagingMultiplier = context?.packagingType === 'no-plastic' ? 1.2 :
+        context?.packagingType === 'recycled' ? 1.1 : 0.9;
+
+    const weightRatios = { 'Karbohidrat': 4, 'Daging Merah': 3, 'Unggas & Telur': 3, 'Ikan & Seafood': 3, 'Sayur & Buah': 2, 'Lainnya': 1 };
+    let totalRatioPoints = 0;
+    const itemsWithRatio = detectedItems.map(item => {
+        const ratio = weightRatios[item.category] || 1;
+        totalRatioPoints += ratio;
+        return { ...item, ratio };
+    });
+
+    let totalCo2PerPortion = 0;
+    let totalPointsPerPortion = 0;
+    const co2Breakdown = [];
+    const socialBreakdown = [];
+
+    itemsWithRatio.forEach(item => {
+        const itemWeightPerPortion = parseFloat(((item.ratio / totalRatioPoints) * weightPerPortionKg).toFixed(3));
+        const co2Factor = GEMINI_EMISSION_FACTORS[item.category] || 0.5;
+        const co2Val = parseFloat((itemWeightPerPortion * co2Factor).toFixed(2));
+        totalCo2PerPortion += co2Val;
+        co2Breakdown.push({ name: `${item.name} (${item.category})`, category: item.category, weightKg: itemWeightPerPortion, factor: co2Factor, result: co2Val });
+
+        const socialFactor = GEMINI_SOCIAL_FACTORS[item.category] || 10;
+        const pointsVal = Math.round(itemWeightPerPortion * socialFactor * 10);
+        totalPointsPerPortion += pointsVal;
+        socialBreakdown.push({ name: item.name, category: item.category, weightKg: itemWeightPerPortion, factor: socialFactor, result: pointsVal });
+    });
+
+    totalPointsPerPortion = Math.round(totalPointsPerPortion * packagingMultiplier);
+    const grandTotalCo2 = parseFloat((totalCo2PerPortion * portionCount).toFixed(2));
+    const grandTotalPoints = Math.round(totalPointsPerPortion * portionCount);
+    const waterSaved = Math.round(grandTotalCo2 * 200);
+    const landSaved = parseFloat((grandTotalCo2 * 0.5).toFixed(1));
+
+    return {
+        ...aiResult,
+        detectedCategory: aiResult.detectedItems?.[0]?.category || 'Lainnya',
+        socialImpact: {
+            totalPoints: grandTotalPoints,
+            co2Saved: grandTotalCo2,
+            waterSaved,
+            landSaved,
+            wasteReduction: parseFloat(totalWeightKg.toFixed(2)),
+            level: grandTotalPoints > 500 ? 'Expert' : 'Aktif',
+            co2Breakdown,
+            socialBreakdown,
+            portionCount,
+            co2PerPortion: parseFloat(totalCo2PerPortion.toFixed(2)),
+            pointsPerPortion: totalPointsPerPortion
+        }
+    };
 }
 
 app.listen(port, () => {

@@ -1,0 +1,237 @@
+{
+  "session": {
+    "id": "host-docker-internal_shannon-1774802521156",
+    "webUrl": "http://host.docker.internal:4173",
+    "status": "completed",
+    "createdAt": "2026-03-29T16:42:11.211Z",
+    "resumeAttempts": [],
+    "originalWorkflowId": "host-docker-internal_shannon-1774802521156",
+    "repoPath": "/repos/FAR-TA2",
+    "completedAt": "2026-03-29T17:39:20.489Z"
+  },
+  "metrics": {
+    "total_duration_ms": 6512715,
+    "total_cost_usd": 54.205108349999996,
+    "phases": {
+      "pre-recon": {
+        "duration_ms": 771323,
+        "duration_percentage": 11.84334029663512,
+        "cost_usd": 7.270795649999998,
+        "agent_count": 1
+      },
+      "recon": {
+        "duration_ms": 689450,
+        "duration_percentage": 10.586214812102172,
+        "cost_usd": 7.797578149999999,
+        "agent_count": 1
+      },
+      "vulnerability-analysis": {
+        "duration_ms": 2663311,
+        "duration_percentage": 40.89402038934607,
+        "cost_usd": 17.722484050000002,
+        "agent_count": 5
+      },
+      "exploitation": {
+        "duration_ms": 2049691,
+        "duration_percentage": 31.472143338070218,
+        "cost_usd": 20.586875999999997,
+        "agent_count": 3
+      },
+      "reporting": {
+        "duration_ms": 338940,
+        "duration_percentage": 5.204281163846415,
+        "cost_usd": 0.8273744999999999,
+        "agent_count": 1
+      }
+    },
+    "agents": {
+      "pre-recon": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 771323,
+            "cost_usd": 7.270795649999998,
+            "success": true,
+            "timestamp": "2026-03-29T16:55:03.139Z",
+            "model": "claude-opus-4-6"
+          }
+        ],
+        "final_duration_ms": 771323,
+        "total_cost_usd": 7.270795649999998,
+        "model": "claude-opus-4-6",
+        "checkpoint": "c17fe6f7f04dfc6ebf555a58e1d489b17353071b"
+      },
+      "recon": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 689450,
+            "cost_usd": 7.797578149999999,
+            "success": true,
+            "timestamp": "2026-03-29T17:06:33.433Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 689450,
+        "total_cost_usd": 7.797578149999999,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "26fef015bc924de062110b6cace2688b54f41f99"
+      },
+      "auth-vuln": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 350018,
+            "cost_usd": 1.61360515,
+            "success": true,
+            "timestamp": "2026-03-29T17:12:24.275Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 350018,
+        "total_cost_usd": 1.61360515,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "687306d1e45193dcfffe32bb59ac9bbbb71bd708"
+      },
+      "ssrf-vuln": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 363518,
+            "cost_usd": 1.65348795,
+            "success": true,
+            "timestamp": "2026-03-29T17:12:37.829Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 363518,
+        "total_cost_usd": 1.65348795,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "3dbcf51f953faddd49c80572061818c3259f65b7"
+      },
+      "authz-vuln": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 395722,
+            "cost_usd": 1.7838224999999999,
+            "success": true,
+            "timestamp": "2026-03-29T17:13:09.886Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 395722,
+        "total_cost_usd": 1.7838224999999999,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "910aac4756bccccab7338506c7b9c59234e7e4bb"
+      },
+      "injection-vuln": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 666451,
+            "cost_usd": 2.9281576000000005,
+            "success": true,
+            "timestamp": "2026-03-29T17:17:40.805Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 666451,
+        "total_cost_usd": 2.9281576000000005,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "89d31f249eaf1e7e5db06f154c350fd61c3f057d"
+      },
+      "auth-exploit": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 464429,
+            "cost_usd": 4.70282925,
+            "success": true,
+            "timestamp": "2026-03-29T17:20:09.211Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 464429,
+        "total_cost_usd": 4.70282925,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "68135178c5b6a8fd19991dc91b55db9bc7552a40"
+      },
+      "xss-vuln": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 887602,
+            "cost_usd": 9.743410850000002,
+            "success": true,
+            "timestamp": "2026-03-29T17:21:21.849Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 887602,
+        "total_cost_usd": 9.743410850000002,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "d0b07ac8d6d7e0d4378ef048b0bdb28717727b1b"
+      },
+      "authz-exploit": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 626346,
+            "cost_usd": 4.04341875,
+            "success": true,
+            "timestamp": "2026-03-29T17:23:36.701Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 626346,
+        "total_cost_usd": 4.04341875,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "dd3d58c3b77e3b7ce4ac737494370ea4b821205e"
+      },
+      "injection-exploit": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 958916,
+            "cost_usd": 11.840627999999999,
+            "success": true,
+            "timestamp": "2026-03-29T17:33:40.178Z",
+            "model": "claude-sonnet-4-6"
+          }
+        ],
+        "final_duration_ms": 958916,
+        "total_cost_usd": 11.840627999999999,
+        "model": "claude-sonnet-4-6",
+        "checkpoint": "5bf4e91ea69946acce5d3b5a865d861157e546b2"
+      },
+      "report": {
+        "status": "success",
+        "attempts": [
+          {
+            "attempt_number": 1,
+            "duration_ms": 338940,
+            "cost_usd": 0.8273744999999999,
+            "success": true,
+            "timestamp": "2026-03-29T17:39:19.974Z",
+            "model": "claude-haiku-4-5-20251001"
+          }
+        ],
+        "final_duration_ms": 338940,
+        "total_cost_usd": 0.8273744999999999,
+        "model": "claude-haiku-4-5-20251001",
+        "checkpoint": "cb6b6a3f8a4a2e0b6efd14f3166b7d683016be2e"
+      }
+    }
+  }
+}

@@ -47,6 +47,17 @@ export const QualityCheckInventory: React.FC<QualityCheckInventoryProps> = ({ on
   }, [currentUser]);
 
   const handleAnalysisComplete = (result: any, image: string, data: any) => {
+    // === DEBUG: Component received AI result ===
+    console.group('[AI→UI] 🎯 QualityCheckInventory menerima hasil analisis');
+    console.log('[AI→UI] qualityPercentage:', result.qualityPercentage);
+    console.log('[AI→UI] isEdible (>=70%):', result.qualityPercentage >= 70 ? '✅ Ya' : '❌ Tidak');
+    console.log('[AI→UI] socialImpact:', result.socialImpact);
+    console.log('[AI→UI] detectedItems count:', result.detectedItems?.length);
+    console.log('[AI→UI] food form data:', data);
+    console.log('[AI→UI] Gambar preview tersedia:', image ? 'Ya' : 'Tidak');
+    console.groupEnd();
+    // === END DEBUG ===
+
     setAnalysisResult(result);
     setPreviewImage(image);
     setFormData(data);

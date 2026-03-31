@@ -8,20 +8,22 @@ import { FoodItem, UserData, ClaimHistoryItem, FAQItem, BroadcastMessage, Addres
 const API_URL = "http://localhost:5000/api";
 
 const sendRequest = async <T>(action: string, data: any = {}): Promise<T> => {
-  console.log(`%c[API REQUEST] ${action}`, 'color: blue; font-weight: bold;', data);
+  // console.log(`%c[API REQUEST] ${action}`, 'color: blue; font-weight: bold;', data);
   
   try {
+    const token = localStorage.getItem('far_token') || sessionStorage.getItem('far_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(API_URL, {
       method: 'POST',
       body: JSON.stringify({ action, data }),
-      headers: {
-        'Content-Type': 'application/json', 
-      },
+      headers,
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
 
     const text = await response.text();
     let json;
@@ -29,22 +31,26 @@ const sendRequest = async <T>(action: string, data: any = {}): Promise<T> => {
     try {
         json = JSON.parse(text);
     } catch (e) {
-        console.error(`%c[API PARSE ERROR] ${action}`, 'color: red; font-weight: bold;', "Raw text:", text);
+        // console.error(`%c[API PARSE ERROR] ${action}`, 'color: red; font-weight: bold;', "Raw text:", text);
         if (text.trim().startsWith('<')) {
              throw new Error("Server Error: Check Deployment URL. Make sure it ends in /exec and permissions are set to 'Anyone'.");
+        }
+        // Fallback to HTTP error if JSON parsing fails and status is not 200
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         throw new Error("Server Error: Received invalid response from backend.");
     }
 
     if (json.status === 'error') {
-      console.error(`%c[API BACKEND ERROR] ${action}`, 'color: red; font-weight: bold;', json.message);
+      // console.error(`%c[API BACKEND ERROR] ${action}`, 'color: red; font-weight: bold;', json.message);
       throw new Error(json.message || "Unknown server error");
     }
     
-    console.log(`%c[API SUCCESS] ${action}`, 'color: green; font-weight: bold;', json.data);
+    // console.log(`%c[API SUCCESS] ${action}`, 'color: green; font-weight: bold;', json.data);
     return json.data;
   } catch (error: any) {
-    console.error(`%c[API NETWORK/CLIENT ERROR] ${action}`, 'color: red; font-weight: bold;', error);
+    // console.error(`%c[API NETWORK/CLIENT ERROR] ${action}`, 'color: red; font-weight: bold;', error);
     throw error;
   }
 };
@@ -109,4 +115,8 @@ export const db = {
   deleteFoodRequest: (id: string) => sendRequest<any>('DELETE_FOOD_REQUEST', { id }),
   getPointHistory: (userId: string) => sendRequest<any[]>('GET_POINT_HISTORY', { userId }),
   getBadges: () => sendRequest<any[]>('GET_BADGES'),
+
+  // --- AI ANALYSIS ---
+  analyzeFood: (inputLabels: string[], imageBase64: string, context: any) =>
+    sendRequest<any>('ANALYZE_FOOD', { inputLabels, imageBase64, context }),
 };

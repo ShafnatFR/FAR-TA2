@@ -69,8 +69,9 @@ const App: React.FC = () => {
     const checkSession = () => {
         // Cek Local Storage (Remember Me) atau Session Storage (Sementara)
         const savedSession = localStorage.getItem('far_session') || sessionStorage.getItem('far_session');
+        const savedToken = localStorage.getItem('far_token') || sessionStorage.getItem('far_token');
         
-        if (savedSession) {
+        if (savedSession && savedToken) {
             try {
                 const parsedUser = JSON.parse(savedSession);
                 setRole(parsedUser.role);
@@ -80,6 +81,8 @@ const App: React.FC = () => {
                 console.error("Session parse error", e);
                 localStorage.removeItem('far_session');
                 sessionStorage.removeItem('far_session');
+                localStorage.removeItem('far_token');
+                sessionStorage.removeItem('far_token');
             }
         }
     };
@@ -238,7 +241,7 @@ const App: React.FC = () => {
     }
   }, [role, claimHistory, foodItems, savedItems, currentUser]);
 
-  const handleLogin = (data: Partial<UserData> & { role: UserRole; email?: string }, remember: boolean = false) => {
+  const handleLogin = (data: Partial<UserData> & { role: UserRole; email?: string; token?: string }, remember: boolean = false) => {
       setRole(data.role);
       
       let finalName = data.name;
@@ -269,8 +272,10 @@ const App: React.FC = () => {
       const sessionString = JSON.stringify(userObject);
       if (remember) {
           localStorage.setItem('far_session', sessionString);
+          if (data.token) localStorage.setItem('far_token', data.token);
       } else {
           sessionStorage.setItem('far_session', sessionString);
+          if (data.token) sessionStorage.setItem('far_token', data.token);
       }
 
       setCurrentView('dashboard');
@@ -319,6 +324,8 @@ const App: React.FC = () => {
       // Clear Sessions
       localStorage.removeItem('far_session');
       sessionStorage.removeItem('far_session');
+      localStorage.removeItem('far_token');
+      sessionStorage.removeItem('far_token');
 
       setRole(null);
       setCurrentUser(null);
