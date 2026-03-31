@@ -69,8 +69,10 @@ export interface FoodItem {
   aiVerification?: {
     isEdible: boolean;
     halalScore: number;
+    qualityScore?: number;
     reason?: string;
     ingredients?: string[];
+    allergens?: string[];
   };
   socialImpact?: SocialImpactData;
 }
@@ -129,6 +131,7 @@ export interface BroadcastMessage {
   title: string;
   content: string;
   target: 'all' | 'provider' | 'volunteer' | 'receiver';
+  type?: 'info' | 'success' | 'warning';
   status: 'sent' | 'draft';
   sentAt: string;
   readCount: number;

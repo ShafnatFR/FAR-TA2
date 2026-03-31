@@ -3,14 +3,16 @@ import { Megaphone, Smartphone, Tablet, Laptop, Eye } from 'lucide-react';
 import { ComposeMessage } from './ComposeMessage';
 import { BroadcastHistory } from './BroadcastHistory';
 import { DevicePreview, DeviceType } from './DevicePreview';
-import { BroadcastMessage } from '../../../../types';
+import { BroadcastMessage, UserData } from '../../../../types';
 
 interface CommunicationProps {
     broadcastMessages: BroadcastMessage[];
     setBroadcastMessages?: React.Dispatch<React.SetStateAction<BroadcastMessage[]>>;
+    onRefresh?: () => void;
+    currentUser?: UserData | null;
 }
 
-export const Communication: React.FC<CommunicationProps> = ({ broadcastMessages, setBroadcastMessages }) => {
+export const Communication: React.FC<CommunicationProps> = ({ broadcastMessages, setBroadcastMessages, onRefresh, currentUser }) => {
     const [broadcastTab, setBroadcastTab] = useState<'compose' | 'history'>('compose');
     const [previewDevice, setPreviewDevice] = useState<DeviceType>('phone');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -20,10 +22,12 @@ export const Communication: React.FC<CommunicationProps> = ({ broadcastMessages,
         title: string;
         content: string;
         target: BroadcastMessage['target'];
+        type: NonNullable<BroadcastMessage['type']>;
     }>({
         title: '',
         content: '',
-        target: 'all'
+        target: 'all',
+        type: 'info'
     });
 
     const handleSendBroadcast = async () => {
@@ -33,26 +37,33 @@ export const Communication: React.FC<CommunicationProps> = ({ broadcastMessages,
         }
 
         setIsSubmitting(true);
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        try {
+            const { db } = await import('../../../../services/db');
+            const newMsg = await db.sendBroadcast({
+                id: '', // Will be set by DB
+                title: formData.title,
+                content: formData.content,
+                target: formData.target,
+                type: formData.type,
+                status: 'sent',
+                sentAt: 'Baru saja',
+                readCount: 0
+            }, currentUser);
 
-        const newMsg: BroadcastMessage = {
-            id: Date.now().toString(),
-            title: formData.title,
-            content: formData.content,
-            target: formData.target,
-            status: 'sent',
-            sentAt: 'Baru saja',
-            readCount: 0
-        };
+            if (setBroadcastMessages) {
+                setBroadcastMessages(prev => [newMsg, ...prev]);
+            }
+            if (onRefresh) onRefresh();
 
-        if (setBroadcastMessages) {
-            setBroadcastMessages(prev => [newMsg, ...prev]);
+            setFormData({ title: '', content: '', target: 'all', type: 'info' });
+            setBroadcastTab('history');
+            alert('Pesan broadcast berhasil dikirim ke seluruh modul target!');
+        } catch (err) {
+            console.error("Broadcast failed:", err);
+            alert("Gagal mengirim broadcast.");
+        } finally {
+            setIsSubmitting(false);
         }
-
-        setIsSubmitting(false);
-        setFormData({ title: '', content: '', target: 'all' });
-        setBroadcastTab('history');
-        alert('Pesan broadcast berhasil dikirim ke seluruh modul target!');
     };
 
     return (

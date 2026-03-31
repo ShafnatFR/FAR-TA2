@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, ShieldCheck, Zap, CheckCircle2, AlertOctagon, 
@@ -123,9 +122,22 @@ export const QualityCheckInventory: React.FC<QualityCheckInventoryProps> = ({ on
               deliveryMethod: formData.deliveryMethod,
               aiVerification: { 
                   isEdible: analysisResult.qualityPercentage >= 70,
-                  halalScore: analysisResult.qualityPercentage,
+                  halalScore: analysisResult.halalScore || 100,
+                  qualityScore: analysisResult.qualityPercentage || 0,
                   reason: isEditing ? editedReasoning : analysisResult.reasoning,
-                  ingredients: (isEditing ? editedIngredients : analysisResult.detectedItems)?.map((i:any) => i.name) || []
+                  ingredients: (isEditing ? editedIngredients : analysisResult.detectedItems)
+                      ?.map((i:any) => i.name)
+                      .filter((name: string) => {
+                          const allergens = [
+                              ...(analysisResult.detectedAllergens || []),
+                              ...(formData.allergens ? formData.allergens.split(',').map((s:string) => s.trim()) : [])
+                          ].map(a => a.toLowerCase());
+                          return !allergens.includes(name.toLowerCase());
+                      }) || [],
+                  allergens: Array.from(new Set([
+                      ...(analysisResult.detectedAllergens || []),
+                      ...(formData.allergens ? formData.allergens.split(',').map((s:string) => s.trim()) : [])
+                  ]))
               },
               socialImpact: analysisResult.socialImpact
           };
@@ -353,36 +365,61 @@ export const QualityCheckInventory: React.FC<QualityCheckInventoryProps> = ({ on
                         </div>
                      </div>
 
-                     <div className="space-y-4">
-                        <h4 className="font-black text-sm text-stone-900 dark:text-white uppercase tracking-tight flex items-center gap-2"><List className="w-4 h-4 text-orange-500" /> Item Terdeteksi dalam Foto</h4>
-                        <div className="flex flex-wrap gap-2">
-                            {(isEditing ? editedIngredients : (analysisResult.detectedItems || [])).map((item: any, i: number) => (
-                                <div key={i} className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-xl">
-                                    <span className="text-sm font-black text-blue-700 dark:text-blue-300 uppercase tracking-tighter">{item.name}</span>
-                                    {isEditing && <button onClick={() => handleRemoveIngredient(i)} className="ml-1 p-0.5 bg-red-100 rounded-full text-red-500 hover:bg-red-200"><X className="w-3 h-3" /></button>}
-                                </div>
-                            ))}
-                        </div>
-                     </div>
-
-                     <div className="grid grid-cols-1 gap-4">
-                        <div className="bg-white dark:bg-stone-900 p-6 rounded-[2rem] border border-stone-200 dark:border-stone-800 shadow-sm">
-                            <h4 className="font-black text-xs text-stone-900 dark:text-white uppercase mb-3 flex items-center gap-2"><Clock className="w-4 h-4 text-blue-500" /> Masa Simpan Aman</h4>
-                            <p className="text-sm font-bold text-stone-800 dark:text-stone-200">Prediksi hingga: <span className="text-blue-600 dark:text-blue-400">{analysisResult.shelfLifePrediction}</span></p>
-                        </div>
-                     </div>
-
-                     {analysisResult.qualityPercentage >= 70 && (
-                        <Button 
-                            onClick={handleFinalPublish} 
-                            isLoading={isPublishing}
-                            disabled={isPublishing}
-                            className="h-16 text-lg font-black tracking-widest uppercase shadow-xl shadow-orange-500/20 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-500"
-                        >
-                            {isPublishing ? 'MENYIMPAN KE DATABASE...' : <><Plus className="w-6 h-6 mr-2" /> PUBLIKASIKAN PRODUK</>}
-                        </Button>
-                     )}
-                </div>
+                     <div className="space-y-6">
+                         <div className="space-y-4">
+                            <h4 className="font-black text-sm text-stone-900 dark:text-white uppercase tracking-tight flex items-center gap-2"><List className="w-4 h-4 text-orange-500" /> Item Terdeteksi dalam Foto</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {(isEditing ? editedIngredients : (analysisResult.detectedItems || []))
+                                    .filter((item: any) => {
+                                        const allergens = (analysisResult.detectedAllergens || []).map((a: string) => a.toLowerCase());
+                                        return !allergens.includes(item.name.toLowerCase());
+                                    })
+                                    .map((item: any, i: number) => (
+                                    <div key={i} className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-xl">
+                                        <span className="text-sm font-black text-blue-700 dark:text-blue-300 uppercase tracking-tighter">{item.name}</span>
+                                        {isEditing && <button onClick={() => handleRemoveIngredient(i)} className="ml-1 p-0.5 bg-red-100 rounded-full text-red-500 hover:bg-red-200"><X className="w-3 h-3" /></button>}
+                                    </div>
+                                ))}
+                            </div>
+                         </div>
+  
+                         {/* DOUBLE BADGE SYSTEM: ALLERGENS */}
+                         <div className="space-y-4 animate-in slide-in-from-left-4 duration-500">
+                            <h4 className="font-black text-sm text-stone-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-red-500" /> Peringatan Alergen
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                                {analysisResult.detectedAllergens && analysisResult.detectedAllergens.length > 0 ? (
+                                    analysisResult.detectedAllergens.map((allergen: string, i: number) => (
+                                        <div key={i} className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800 rounded-xl">
+                                            <span className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-tighter">{allergen}</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-xs text-stone-400 italic px-1">Tidak ada alergen kritis terdeteksi.</p>
+                                )}
+                            </div>
+                         </div>
+                      </div>
+ 
+                      <div className="grid grid-cols-1 gap-4">
+                         <div className="bg-white dark:bg-stone-900 p-6 rounded-[2rem] border border-stone-200 dark:border-stone-800 shadow-sm">
+                             <h4 className="font-black text-xs text-stone-900 dark:text-white uppercase mb-3 flex items-center gap-2"><Clock className="w-4 h-4 text-blue-500" /> Masa Simpan Aman</h4>
+                             <p className="text-sm font-bold text-stone-800 dark:text-stone-200">Prediksi hingga: <span className="text-blue-600 dark:text-blue-400">{analysisResult.shelfLifePrediction}</span></p>
+                         </div>
+                      </div>
+ 
+                      {analysisResult.qualityPercentage >= 70 && (
+                         <Button 
+                             onClick={handleFinalPublish} 
+                             isLoading={isPublishing}
+                             disabled={isPublishing}
+                             className="h-16 text-lg font-black tracking-widest uppercase shadow-xl shadow-orange-500/20 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-500"
+                         >
+                             {isPublishing ? 'MENYIMPAN KE DATABASE...' : <><Plus className="w-6 h-6 mr-2" /> PUBLIKASIKAN PRODUK</>}
+                         </Button>
+                      )}
+                 </div>
             )}
         </div>
     </div>

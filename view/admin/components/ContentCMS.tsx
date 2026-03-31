@@ -1,13 +1,29 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { Layout, Trash2, Edit, Plus, X, BookOpen, HelpCircle, Bold, Italic, List, ListOrdered, Filter, Eye, Smartphone, Tablet, Laptop, ChevronDown, ChevronUp, MessageSquare, Truck, User, Store, Search } from 'lucide-react';
+import { Layout, Trash2, Edit, Plus, X, BookOpen, HelpCircle, Bold, Italic, List, ListOrdered, Filter, Eye, Smartphone, Tablet, Laptop, ChevronDown, ChevronUp, MessageSquare, Truck, User, Store, Search, Loader2 } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { FAQItem } from '../../../types';
+import { FAQItem, UserData } from '../../../types';
 
 interface ContentCMSProps {
     faqs?: FAQItem[];
     setFaqs?: React.Dispatch<React.SetStateAction<FAQItem[]>>;
+    onRefresh?: () => void;
+    currentUser?: UserData | null;
 }
+
+// Simple Markdown Parser for Preview
+const parseMarkdown = (text: string) => {
+    if (!text) return '';
+    // Bold: **text**
+    let html = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Italic: _text_
+    html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+    // Lists: * text or - text
+    html = html.replace(/^\s*[\*\-]\s+(.*)$/gm, '<li class="list-disc ml-4">$1</li>');
+    // Newlines
+    html = html.replace(/\n/g, '<br />');
+    return <div dangerouslySetInnerHTML={{ __html: html }} />;
+};
 
 // Sub-component for Device Frame Preview
 const DeviceFrame: React.FC<{ device: 'phone' | 'tablet' | 'laptop', children: React.ReactNode }> = ({ device, children }) => {
@@ -36,13 +52,14 @@ const DeviceFrame: React.FC<{ device: 'phone' | 'tablet' | 'laptop', children: R
     );
 };
 
-export const ContentCMS: React.FC<ContentCMSProps> = ({ faqs = [], setFaqs }) => {
+export const ContentCMS: React.FC<ContentCMSProps> = ({ faqs = [], setFaqs, onRefresh, currentUser }) => {
   const [previewDevice, setPreviewDevice] = useState<'phone' | 'tablet' | 'laptop'>('phone');
-  const [faqForm, setFaqForm] = useState({ id: '', question: '', answer: '', category: 'Umum' });
+  const [faqForm, setFaqForm] = useState<FAQItem>({ id: '', question: '', answer: '', category: 'Umum' });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditingFaq, setIsEditingFaq] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('Semua');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // States for Preview Logic
@@ -83,32 +100,57 @@ export const ContentCMS: React.FC<ContentCMSProps> = ({ faqs = [], setFaqs }) =>
 
   const groupedFaqs = useMemo(() => {
       const groups: { [key: string]: FAQItem[] } = {};
-      faqs.forEach(item => {
+      // Add current form to groups for live preview if it's the one being edited
+      const displayFaqs = isModalOpen && faqForm.question 
+        ? [...faqs.filter(f => f.id !== faqForm.id), faqForm]
+        : faqs;
+
+      displayFaqs.forEach(item => {
           const cat = item.category || 'Umum';
           if (!groups[cat]) groups[cat] = [];
           groups[cat].push(item);
       });
       return groups;
-  }, [faqs]);
+  }, [faqs, faqForm, isModalOpen]);
 
-  const handleSaveFaq = () => {
+  const handleSaveFaq = async () => {
       if (!setFaqs) return;
       if (!faqForm.question.trim() || !faqForm.answer.trim()) {
           alert('Mohon isi Judul (Pertanyaan) dan Deskripsi (Jawaban)');
           return;
       }
-      if (isEditingFaq) {
-          setFaqs(prev => prev.map(f => f.id === faqForm.id ? faqForm : f));
-      } else {
-          setFaqs(prev => [{ id: `faq-${Date.now()}`, ...faqForm }, ...prev]);
+
+      setIsSaving(true);
+      try {
+          const { db } = await import('../../../services/db');
+          const savedFaq = await db.upsertFAQ(faqForm, currentUser);
+          
+          if (onRefresh) onRefresh();
+          if (isEditingFaq) {
+              setFaqs(prev => prev.map(f => f.id === faqForm.id ? savedFaq : f));
+          } else {
+              setFaqs(prev => [savedFaq, ...prev]);
+          }
+          setIsModalOpen(false);
+      } catch (err) {
+          console.error('[ContentCMS] Save failure:', err);
+          alert('Gagal menyimpan FAQ ke database.');
+      } finally {
+          setIsSaving(false);
       }
-      setIsModalOpen(false);
   };
 
-  const handleDeleteFaq = (id: string) => {
+  const handleDeleteFaq = async (id: string) => {
       if (!setFaqs) return;
-      if (confirm('Hapus konten ini?')) {
-          setFaqs(prev => prev.filter(f => f.id !== id));
+      if (confirm('Hapus konten ini secara permanen dari database?')) {
+          try {
+              const { db } = await import('../../../services/db');
+              await db.deleteFAQ(id, currentUser);
+              if (onRefresh) onRefresh();
+              setFaqs(prev => prev.filter(f => f.id !== id));
+          } catch (err) {
+              alert('Gagal menghapus FAQ.');
+          }
       }
   };
 
@@ -122,6 +164,9 @@ export const ContentCMS: React.FC<ContentCMSProps> = ({ faqs = [], setFaqs }) =>
     let replacement = '';
     if (type === 'bold') replacement = `**${selectedText}**`;
     if (type === 'italic') replacement = `_${selectedText}_`;
+    if (type === 'list') replacement = `\n* ${selectedText}`;
+    if (type === 'number') replacement = `\n1. ${selectedText}`;
+    
     const newAnswer = text.substring(0, start) + replacement + text.substring(end);
     setFaqForm({ ...faqForm, answer: newAnswer });
   };
@@ -138,7 +183,7 @@ export const ContentCMS: React.FC<ContentCMSProps> = ({ faqs = [], setFaqs }) =>
               </div>
               <Button 
                 className="w-full md:w-auto h-12 px-6 font-black uppercase tracking-widest text-xs shadow-xl shadow-orange-500/20"
-                onClick={() => { setFaqForm({ id: '', question: '', answer: '', category: 'Umum' }); setIsEditingFaq(false); setIsModalOpen(true); }}
+                onClick={() => { setFaqForm({ id: `faq-${Date.now()}`, question: '', answer: '', category: 'Umum' }); setIsEditingFaq(false); setIsModalOpen(true); }}
               >
                   <Plus className="w-5 h-5 mr-2" /> TAMBAH FAQ
               </Button>
@@ -298,7 +343,7 @@ export const ContentCMS: React.FC<ContentCMSProps> = ({ faqs = [], setFaqs }) =>
                                                                           </button>
                                                                           {isFaqOpen && (
                                                                               <div className="p-3 pt-0 pl-4 text-[10px] text-stone-500 leading-relaxed italic border-l-2 border-orange-500 ml-3 mb-2">
-                                                                                  {item.answer}
+                                                                                  {parseMarkdown(item.answer)}
                                                                               </div>
                                                                           )}
                                                                       </div>
@@ -376,7 +421,19 @@ export const ContentCMS: React.FC<ContentCMSProps> = ({ faqs = [], setFaqs }) =>
 
                       <div className="p-6 md:p-8 bg-stone-50 dark:bg-stone-950/50 border-t border-stone-100 dark:border-stone-800 flex gap-4">
                           <Button variant="ghost" className="flex-1 h-14 font-black uppercase text-[10px] tracking-[0.2em] border-2 border-stone-200 dark:border-stone-700 text-stone-400" onClick={() => setIsModalOpen(false)}>BATALKAN</Button>
-                          <Button className="flex-[2] h-14 font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-orange-500/20" onClick={handleSaveFaq}>{isEditingFaq ? 'SIMPAN PERUBAHAN' : 'TERBITKAN FAQ'}</Button>
+                          <Button 
+                            className="flex-[2] h-14 font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-orange-500/20" 
+                            onClick={handleSaveFaq}
+                            disabled={isSaving}
+                          >
+                            {isSaving ? (
+                                <div className="flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> MENERBITKAN...
+                                </div>
+                            ) : (
+                                isEditingFaq ? 'SIMPAN PERUBAHAN' : 'TERBITKAN FAQ'
+                            )}
+                          </Button>
                       </div>
                   </div>
               </div>

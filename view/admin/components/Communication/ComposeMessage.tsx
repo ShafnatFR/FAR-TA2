@@ -5,8 +5,8 @@ import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 
 interface ComposeMessageProps {
-    formData: { title: string, content: string, target: string };
-    setFormData: React.Dispatch<React.SetStateAction<{ title: string, content: string, target: string }>>;
+    formData: { title: string, content: string, target: string, type: string };
+    setFormData: React.Dispatch<React.SetStateAction<{ title: string, content: string, target: string, type: string }>>;
     onSend: () => Promise<void>;
     isSubmitting: boolean;
 }
@@ -61,6 +61,31 @@ export const ComposeMessage: React.FC<ComposeMessageProps> = ({ formData, setFor
                             >
                                 <div className="text-xl">{opt.icon}</div>
                                 <p className="text-[9px] font-black uppercase tracking-tighter">{opt.label}</p>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest ml-1">Tipe Pengumuman</label>
+                    <div className="flex gap-2">
+                        {[
+                            { value: 'info', label: 'Informasi', color: 'blue' },
+                            { value: 'success', label: 'Pembaruan', color: 'green' },
+                            { value: 'warning', label: 'Pemberitahuan', color: 'orange' }
+                        ].map(opt => (
+                            <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, type: opt.value })}
+                                className={`px-4 py-2 rounded-xl border-2 text-[9px] font-black uppercase tracking-widest transition-all ${formData.type === opt.value
+                                    ? opt.value === 'info' ? 'border-blue-500 bg-blue-50 text-blue-600' : 
+                                      opt.value === 'success' ? 'border-green-500 bg-green-50 text-green-600' : 
+                                      'border-orange-500 bg-orange-50 text-orange-600'
+                                    : 'border-stone-100 dark:border-stone-800 text-stone-400 hover:border-stone-200'
+                                }`}
+                            >
+                                {opt.label}
                             </button>
                         ))}
                     </div>

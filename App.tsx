@@ -50,11 +50,7 @@ const App: React.FC = () => {
   const [globalUsers, setGlobalUsers] = useState<UserData[]>([]);
 
   // Centralized Global Broadcast Data
-  const [broadcastMessages, setBroadcastMessages] = useState<BroadcastMessage[]>([
-    { id: '1', title: 'Update Sistem v1.3.0', content: 'Kami telah memperbarui sistem poin dan menambahkan fitur AI Quality Audit baru. Terima kasih atas dukungan Anda!', target: 'all', status: 'sent', sentAt: '20 Feb 2025', readCount: 850 },
-    { id: '2', title: 'Maintenance Server Berhasil', content: 'Pemeliharaan sistem rutin telah selesai dilakukan. Aplikasi kini lebih stabil.', target: 'all', status: 'sent', sentAt: '18 Feb 2025', readCount: 720 },
-    { id: '3', title: 'Misi Baru: Area Gedebage', content: 'Ada 5 donasi besar membutuhkan pengantaran segera di area Gedebage. Cek menu logistik!', target: 'volunteer', status: 'sent', sentAt: '15 Feb 2025', readCount: 156 }
-  ]);
+  const [broadcastMessages, setBroadcastMessages] = useState<BroadcastMessage[]>([]);
 
   const [globalFAQs, setGlobalFAQs] = useState<FAQItem[]>([
       { id: 'f1', question: 'Apa itu Food AI Rescue?', answer: 'Platform penyelamatan surplus pangan berbasis AI yang menghubungkan bisnis makanan dengan komunitas yang membutuhkan untuk mengurangi pemborosan makanan.', category: 'Umum' },
@@ -143,14 +139,18 @@ const App: React.FC = () => {
 
             console.log("Fetching Data with Filters:", { providerIdFilter, claimsFilters });
 
-            const [inventoryData, claimsData, settingsData] = await Promise.all([
+            const [inventoryData, claimsData, settingsData, faqData, broadcastsData] = await Promise.all([
                 db.getInventory(providerIdFilter),
                 db.getClaims(claimsFilters),
-                db.getSettings()
+                db.getSettings(),
+                db.getFAQs(),
+                db.getBroadcasts()
             ]);
 
             if (settingsData) setAppSettings(settingsData);
             if (inventoryData) setFoodItems(inventoryData);
+            if (faqData) setGlobalFAQs(faqData);
+            if (broadcastsData) setBroadcastMessages(broadcastsData);
             
             let finalClaims = claimsData || [];
             if (role === 'receiver' && claimsData) {

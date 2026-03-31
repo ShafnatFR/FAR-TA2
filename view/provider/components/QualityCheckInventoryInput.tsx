@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ArrowRight, Upload, Sparkles, Timer, Weight, ShoppingBag, MapPin } from 'lucide-react';
+import { ArrowRight, Upload, Sparkles, Timer, Weight, ShoppingBag, MapPin, AlertTriangle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { DeliveryMethod, Address } from '../../../types';
@@ -57,6 +57,7 @@ export const QualityCheckInventoryInput: React.FC<QualityCheckInventoryInputProp
     storageLocation: 'Suhu Ruang',
     packaging: 'plastic' as 'plastic' | 'recycled' | 'no-plastic', 
     deliveryMethod: 'pickup' as DeliveryMethod,
+    allergens: '',
     addressId: addresses.length > 0 ? (addresses.find(a => a.isPrimary)?.id || addresses[0].id) : ''
   });
 
@@ -256,6 +257,17 @@ export const QualityCheckInventoryInput: React.FC<QualityCheckInventoryInputProp
         </div>
 
         <Input label="Bahan Utama (Ketik manual)" value={form.ingredients} onChange={e => setForm({...form, ingredients: e.target.value})} placeholder="Ayam, Nasi, Sayur, Telur..." />
+        
+        <div className="animate-in slide-in-from-left-2 transition-all">
+            <Input 
+                label="Punya Alergen? (Kacang/Susu/dll)" 
+                value={form.allergens} 
+                onChange={e => setForm({...form, allergens: e.target.value})} 
+                placeholder="Kosongkan jika tidak ada" 
+                icon={<AlertTriangle className="w-4 h-4 text-amber-500" />}
+            />
+            <p className="text-[10px] text-stone-400 mt-1 italic leading-tight">*Input ini membantu AI melakukan verifikasi silang lebih akurat.</p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input 

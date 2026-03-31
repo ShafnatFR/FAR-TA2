@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ShieldCheck, Info, Check, X, AlertCircle, Sparkles, Biohazard } from 'lucide-react';
+import { ShieldCheck, Info, Check, X, AlertCircle, Sparkles, Biohazard, AlertTriangle, ChevronRight } from 'lucide-react';
 
 interface AIVerificationCardProps {
     verification: {
@@ -8,6 +8,7 @@ interface AIVerificationCardProps {
         halalScore: number;
         reason?: string;
         ingredients?: string[];
+        allergens?: string[];
     };
 }
 
@@ -49,19 +50,37 @@ export const AIVerificationCard: React.FC<AIVerificationCardProps> = ({ verifica
                     </div>
 
                     {/* Ingredients Section */}
-                    <div className="space-y-3">
-                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 px-1">Komposisi Terdeteksi</h4>
-                        <div className="flex flex-wrap gap-2">
-                            {verification.ingredients && verification.ingredients.length > 0 ? (
-                                verification.ingredients.map((ing, i) => (
-                                    <span key={i} className="px-3 py-1.5 bg-stone-50 dark:bg-stone-800 border border-stone-100 dark:border-stone-700 rounded-xl text-[10px] font-bold text-stone-600 dark:text-stone-300 uppercase tracking-tight">
-                                        {ing}
-                                    </span>
-                                ))
-                            ) : (
-                                <span className="text-[10px] text-stone-400 italic font-medium px-1">Gagal mendeteksi komposisi spesifik.</span>
-                            )}
+                    <div className="space-y-4">
+                        <div className="space-y-3">
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 px-1">Komposisi Terdeteksi</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {verification.ingredients && verification.ingredients.length > 0 ? (
+                                    verification.ingredients.map((ing, i) => (
+                                        <span key={i} className="px-3 py-1.5 bg-stone-50 dark:bg-stone-800 border border-stone-100 dark:border-stone-700 rounded-xl text-[10px] font-bold text-stone-600 dark:text-stone-300 uppercase tracking-tight">
+                                            {ing}
+                                        </span>
+                                    ))
+                                ) : (
+                                    <span className="text-[10px] text-stone-400 italic font-medium px-1">Gagal mendeteksi komposisi spesifik.</span>
+                                )}
+                            </div>
                         </div>
+
+                        {/* DOUBLE BADGE SYSTEM: ALLERGENS (RECEIVER VIEW) */}
+                        {(verification.allergens && verification.allergens.length > 0) && (
+                            <div className="space-y-3 pt-2 animate-in slide-in-from-left-4 duration-500">
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-red-500 px-1 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" /> Peringatan Alergen
+                                </h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {verification.allergens.map((allergen: string, i: number) => (
+                                        <span key={i} className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-xl text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-tight">
+                                            {allergen}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -90,8 +109,3 @@ export const AIVerificationCard: React.FC<AIVerificationCardProps> = ({ verifica
     );
 };
 
-const ChevronRight = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-    </svg>
-);

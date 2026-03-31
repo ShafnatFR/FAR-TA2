@@ -1,5 +1,5 @@
 
-import { FoodItem, UserData, ClaimHistoryItem, FAQItem, BroadcastMessage, Address } from '../types';
+import { FoodItem, UserData, ClaimHistoryItem, FAQItem, BroadcastMessage, Address, AdminUser, SystemLog } from '../types';
 
 /**
  * URL Google Apps Script Web App.
@@ -97,11 +97,11 @@ export const db = {
 
   // --- UTILS ---
   getFAQs: () => sendRequest<FAQItem[]>('GET_FAQS'),
-  getBroadcasts: () => sendRequest<BroadcastMessage[]>('GET_NOTIFICATIONS'),
-  sendBroadcast: (message: BroadcastMessage) => sendRequest<BroadcastMessage>('SEND_BROADCAST', message),
+  getBroadcasts: () => sendRequest<BroadcastMessage[]>('GET_BROADCASTS'),
+  sendBroadcast: (message: BroadcastMessage, actor: any) => sendRequest<BroadcastMessage>('SEND_BROADCAST', { message, actor }),
   initDB: () => sendRequest<string>('INIT_DB'),
   getSettings: () => sendRequest<any>('GET_SETTINGS'),
-  updateSettings: (settings: any) => sendRequest<any>('UPDATE_SETTINGS', settings),
+  updateSettings: (settings: any, actor: any) => sendRequest<any>('UPDATE_SETTINGS', { settings, actor }),
   getSocialImpact: (userId: string) => sendRequest<any>('GET_SOCIAL_IMPACT', { userId }),
   getImpactChart: (userId: string, period: string = '7d') => sendRequest<any>('GET_IMPACT_CHART', { userId, period }),
   getFoodRequests: (receiverId?: string) => sendRequest<any[]>('GET_FOOD_REQUESTS', { receiverId }),
@@ -109,4 +109,15 @@ export const db = {
   deleteFoodRequest: (id: string) => sendRequest<any>('DELETE_FOOD_REQUEST', { id }),
   getPointHistory: (userId: string) => sendRequest<any[]>('GET_POINT_HISTORY', { userId }),
   getBadges: () => sendRequest<any[]>('GET_BADGES'),
+  getAdminDashboard: () => sendRequest<any>('GET_ADMIN_DASHBOARD'),
+  getAdminImpact: (period: string) => sendRequest<any>('GET_ADMIN_IMPACT', { period }),
+  getAdminTargets: () => sendRequest<any[]>('GET_ADMIN_TARGETS'),
+  updateAdminTarget: (metricKey: string, value: number, actor: any) => sendRequest<any>('UPDATE_ADMIN_TARGET', { metricKey, value, actor }),
+  upsertFAQ: (faq: any, actor: any) => sendRequest<any>('UPSERT_FAQ', { faq, actor }),
+  deleteFAQ: (id: any, actor: any) => sendRequest<any>('DELETE_FAQ', { id, actor }),
+  assignVolunteer: (claimId: any, volunteerId: any, volunteerName: string, actor: any) => sendRequest<any>('ASSIGN_VOLUNTEER', { claimId, volunteerId, volunteerName, actor }),
+  getAdmins: () => sendRequest<AdminUser[]>('GET_ADMINS'),
+  getSystemLogs: () => sendRequest<SystemLog[]>('GET_SYSTEM_LOGS'),
+  upsertAdmin: (admin: any, actor: any) => sendRequest<any>('UPSERT_ADMIN', { admin, actor }),
+  deleteAdmin: (id: string, actor: any) => sendRequest<any>('DELETE_ADMIN', { id, actor }),
 };

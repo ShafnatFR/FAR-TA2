@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
 const db = require('./db');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -52,12 +52,15 @@ app.post('/api', async (req, res) => {
             case 'UPDATE_REPORT_STATUS': result = await updateReportStatus(data.id, data.status); break;
 
             case 'GET_FAQS': result = await getAllData('faqs'); break;
-            case 'GET_NOTIFICATIONS': result = await getAllData('notifications'); break;
-            case 'SEND_BROADCAST': result = await sendBroadcast(data); break;
+            case 'GET_BROADCASTS': result = await getBroadcasts(); break;
+            case 'SEND_BROADCAST': 
+                result = await sendBroadcast(data.message || data, data.actor); 
+                break;
             
             case 'GET_SETTINGS': result = appSettings; break;
             case 'UPDATE_SETTINGS': 
-                appSettings = { ...appSettings, ...data };
+                appSettings = { ...appSettings, ...(data.settings || data) };
+                await logAction(data.actor?.id, data.actor?.name, 'Update Settings', `Ubah pengaturan sistem: ${Object.keys(data.settings || data).join(', ')}`);
                 result = appSettings; 
                 break;
 
@@ -70,6 +73,31 @@ app.post('/api', async (req, res) => {
 
             case 'GET_POINT_HISTORY': result = await getPointHistory(data.userId); break;
             case 'GET_BADGES': result = await getAllData('badges'); break;
+
+            case 'GET_ADMIN_DASHBOARD': result = await getAdminDashboard(); break;
+            case 'GET_ADMIN_IMPACT': result = await getAdminImpact(data.period); break;
+            case 'GET_ADMIN_TARGETS': result = await getAdminTargets(); break;
+            case 'UPDATE_ADMIN_TARGET': 
+                result = await updateAdminTarget(data.metricKey, data.value); 
+                await logAction(data.actor?.id, data.actor?.name, 'Update Target', `Ubah target ${data.metricKey} menjadi ${data.value}`);
+                break;
+            case 'UPSERT_FAQ': 
+                result = await upsertFAQ(data.faq); 
+                await logAction(data.actor?.id, data.actor?.name, 'Upsert FAQ', `Simpan FAQ: ${data.faq.question.substring(0, 30)}...`);
+                break;
+            case 'DELETE_FAQ': 
+                result = await deleteFAQ(data.id); 
+                await logAction(data.actor?.id, data.actor?.name, 'Delete FAQ', `Hapus FAQ ID: ${data.id}`, 'warning');
+                break;
+            case 'ASSIGN_VOLUNTEER': 
+                result = await assignVolunteer(data.claimId, data.volunteerId, data.volunteerName); 
+                await logAction(data.actor?.id, data.actor?.name, 'Assign Volunteer', `Tugaskan ${data.volunteerName} ke Klaim #${data.claimId}`);
+                break;
+
+            case 'GET_ADMINS': result = await getAdmins(); break;
+            case 'GET_SYSTEM_LOGS': result = await getSystemLogs(); break;
+            case 'UPSERT_ADMIN': result = await upsertAdmin(data.admin, data.actor); break;
+            case 'DELETE_ADMIN': result = await deleteAdmin(data.id, data.actor); break;
 
             case 'UPLOAD_IMAGE': 
                 const { uploadToFileSystem } = require('./fileService');
@@ -100,6 +128,18 @@ const ROLE_MAP = {
 };
 
 const mapRole = (role) => ROLE_MAP[role] || role;
+
+async function logAction(actorId, actorName, action, details, severity = 'info') {
+    try {
+        await db.query(
+            'INSERT INTO system_logs (actor_id, actor_name, action, details, severity) VALUES (?, ?, ?, ?, ?)',
+            [actorId || 0, actorName || 'System', action, details, severity]
+        );
+        console.log(`[LOG] ${action} by ${actorName}`);
+    } catch (err) {
+        console.error('[LOG ERROR]', err);
+    }
+}
 
 // --- IMPLEMENTATIONS ---
 
@@ -310,12 +350,90 @@ async function getInventory(providerId) {
 }
 
 async function addFoodItem(data) {
-    const { providerId, name, description, initialQuantity, currentQuantity, expiryTime, imageUrl, deliveryMethod } = data;
-    const [result] = await db.query(
-        'INSERT INTO food_items (provider_id, name, description, initial_quantity, current_quantity, max_quantity, expiry_time, distribution_start_time, distribution_end_time, delivery_method, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [providerId, name, description, initialQuantity, currentQuantity, initialQuantity, expiryTime, '08:00:00', '20:00:00', deliveryMethod.toUpperCase(), imageUrl]
-    );
-    return { id: result.insertId, ...data };
+    const { providerId, name, description, initialQuantity, currentQuantity, expiryTime, imageUrl, deliveryMethod, aiVerification, socialImpact } = data;
+    
+    // Parse distribution times from frontend datetime-local format
+    let distStart = '08:00:00';
+    let distEnd = '20:00:00';
+    let expiryDateTime = expiryTime;
+    
+    if (data.distributionStart) {
+        // Format: "2026-03-30T18:30" → extract time or use full datetime
+        distStart = data.distributionStart.includes('T') 
+            ? data.distributionStart.split('T')[1] + ':00'
+            : data.distributionStart;
+    }
+    if (data.distributionEnd) {
+        distEnd = data.distributionEnd.includes('T') 
+            ? data.distributionEnd.split('T')[1] + ':00'
+            : data.distributionEnd;
+        // Use distributionEnd as expiry if expiryTime is just a time string
+        if (data.distributionEnd.includes('T')) {
+            expiryDateTime = data.distributionEnd.replace('T', ' ') + ':00';
+        }
+    }
+
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Insert food_items
+        const [foodResult] = await connection.query(
+            'INSERT INTO food_items (provider_id, name, description, initial_quantity, current_quantity, min_quantity, max_quantity, expiry_time, distribution_start_time, distribution_end_time, delivery_method, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [providerId, name, description, initialQuantity, currentQuantity, data.minQuantity || 1, data.maxQuantity || initialQuantity, expiryDateTime, distStart, distEnd, deliveryMethod.toUpperCase(), imageUrl]
+        );
+        const foodId = foodResult.insertId;
+
+        // 2. Insert ai_verifications (if AI data exists)
+        if (aiVerification) {
+            const isEdible = aiVerification.isEdible ? 1 : 0;
+            const halalScore = aiVerification.halalScore || 0;
+            const qualityScore = aiVerification.qualityScore || halalScore;
+            const reason = aiVerification.reason || '';
+            const ingredients = JSON.stringify(aiVerification.ingredients || []);
+
+            await connection.query(
+                'INSERT INTO ai_verifications (food_id, is_edible, halal_score, quality_score, reason, ingredients) VALUES (?, ?, ?, ?, ?, ?)',
+                [foodId, isEdible, halalScore, qualityScore, reason, ingredients]
+            );
+            console.log(`[ADD_FOOD] AI Verification saved for food_id: ${foodId}`);
+        }
+
+        // 3. Insert social_impacts (if impact data exists)
+        if (socialImpact) {
+            const totalPotentialPoints = socialImpact.totalPoints || 0;
+            const co2PerPortion = socialImpact.co2PerPortion || socialImpact.co2Saved || 0;
+            const waterSaved = socialImpact.waterSaved || 0;
+            const landSaved = socialImpact.landSaved || 0;
+            
+            // Store full breakdown data as JSON for future reference
+            const impactDetails = JSON.stringify({
+                co2Breakdown: socialImpact.co2Breakdown || [],
+                socialBreakdown: socialImpact.socialBreakdown || [],
+                portionCount: socialImpact.portionCount || 1,
+                co2PerPortion: socialImpact.co2PerPortion || 0,
+                pointsPerPortion: socialImpact.pointsPerPortion || 0,
+                wasteReduction: socialImpact.wasteReduction || 0,
+                level: socialImpact.level || 'Aktif'
+            });
+
+            await connection.query(
+                'INSERT INTO social_impacts (food_id, total_potential_points, co2_per_portion, water_saved_liter, land_saved_sqm, impact_details) VALUES (?, ?, ?, ?, ?, ?)',
+                [foodId, totalPotentialPoints, co2PerPortion, waterSaved, landSaved, impactDetails]
+            );
+            console.log(`[ADD_FOOD] Social Impact saved for food_id: ${foodId}`);
+        }
+
+        await connection.commit();
+        console.log(`[ADD_FOOD] Successfully saved food_id: ${foodId} with AI verification and social impact`);
+        return { id: foodId, ...data };
+    } catch (error) {
+        await connection.rollback();
+        console.error('[ADD_FOOD] Transaction failed:', error);
+        throw error;
+    } finally {
+        connection.release();
+    }
 }
 
 async function updateFoodStock(id, newQuantity) {
@@ -712,6 +830,443 @@ async function getPointHistory(userId) {
         date: r.created_at,
         type: r.activity_type
     }));
+}
+
+async function getAdminDashboard() {
+    // 1. Aggregate REAL impact stats from completed claims + social_impacts
+    const [impactRows] = await db.query(`
+        SELECT 
+            COALESCE(SUM(si.co2_per_portion * c.claimed_quantity * 0.45), 0) as totalSavedKg,
+            COALESCE(SUM(si.co2_per_portion * c.claimed_quantity), 0) as totalCo2Saved,
+            COUNT(DISTINCT c.receiver_id) as uniqueBeneficiaries,
+            COUNT(c.id) as completedClaims
+        FROM claims c
+        JOIN food_items f ON c.food_id = f.id
+        LEFT JOIN social_impacts si ON f.id = si.food_id
+        WHERE c.status = 'COMPLETED'
+    `);
+    const impact = impactRows[0] || {};
+
+    // 2. Total claims count (all statuses)
+    const [claimCountRows] = await db.query('SELECT COUNT(*) as total FROM claims');
+    const totalClaims = claimCountRows[0]?.total || 0;
+
+    // 3. Active inventory
+    const [invRows] = await db.query(`
+        SELECT COUNT(*) as activeInventory 
+        FROM food_items 
+        WHERE (status = 'AVAILABLE' OR status IS NULL) AND current_quantity > 0
+    `);
+    const activeInventory = invRows[0]?.activeInventory || 0;
+
+    // 4. Report counts by status
+    const [reportRows] = await db.query(`
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'NEW' THEN 1 ELSE 0 END) as newCount,
+            SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as inProgressCount,
+            SUM(CASE WHEN status = 'RESOLVED' THEN 1 ELSE 0 END) as resolvedCount,
+            SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejectedCount
+        FROM reports
+    `);
+    const reports = reportRows[0] || {};
+    const pendingReports = (Number(reports.newCount) || 0) + (Number(reports.inProgressCount) || 0);
+
+    // 5. User counts by role
+    const [userRoleRows] = await db.query(`
+        SELECT role, COUNT(*) as count FROM users GROUP BY role
+    `);
+    const totalUsers = userRoleRows.reduce((sum, r) => sum + Number(r.count), 0);
+    const usersByRole = {};
+    userRoleRows.forEach(r => {
+        const frontendRole = Object.keys(ROLE_MAP).find(k => ROLE_MAP[k] === r.role) || r.role;
+        usersByRole[frontendRole] = Number(r.count);
+    });
+
+    // 6. Top 5 Donatur by completed claims weight
+    const [topDonorRows] = await db.query(`
+        SELECT u.id, u.name, u.avatar,
+               COUNT(c.id) as totalDonations,
+               COALESCE(SUM(si.co2_per_portion * c.claimed_quantity * 0.45), 0) as totalKg
+        FROM claims c
+        JOIN food_items f ON c.food_id = f.id
+        JOIN users u ON f.provider_id = u.id
+        LEFT JOIN social_impacts si ON f.id = si.food_id
+        WHERE c.status = 'COMPLETED'
+        GROUP BY u.id, u.name, u.avatar
+        ORDER BY totalKg DESC
+        LIMIT 5
+    `);
+
+    // 7. Trend data: last 7 days comparison
+    const [trendRows] = await db.query(`
+        SELECT 
+            DATE(c.created_at) as date,
+            COALESCE(SUM(si.co2_per_portion * c.claimed_quantity * 0.45), 0) as wasteKg,
+            COALESCE(SUM(si.co2_per_portion * c.claimed_quantity), 0) as co2Kg,
+            COUNT(c.id) as transactions
+        FROM claims c
+        JOIN food_items f ON c.food_id = f.id
+        LEFT JOIN social_impacts si ON f.id = si.food_id
+        WHERE c.status = 'COMPLETED'
+        AND c.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY DATE(c.created_at)
+        ORDER BY date
+    `);
+
+    // Previous 7 days for growth comparison
+    const [prevTrendRows] = await db.query(`
+        SELECT 
+            COALESCE(SUM(si.co2_per_portion * c.claimed_quantity * 0.45), 0) as wasteKg,
+            COUNT(c.id) as transactions
+        FROM claims c
+        JOIN food_items f ON c.food_id = f.id
+        LEFT JOIN social_impacts si ON f.id = si.food_id
+        WHERE c.status = 'COMPLETED'
+        AND c.created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+        AND c.created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+    `);
+    const prevPeriod = prevTrendRows[0] || {};
+    const currentWasteKg = trendRows.reduce((sum, r) => sum + Number(r.wasteKg), 0);
+    const prevWasteKg = Number(prevPeriod.wasteKg) || 0;
+    const growthPercent = prevWasteKg > 0 ? ((currentWasteKg - prevWasteKg) / prevWasteKg * 100).toFixed(1) : null;
+
+    // 8. Expiring Soon (< 24 hours)
+    const [expiringRows] = await db.query(`
+        SELECT f.id, f.name, f.expiry_time as expiryTime, f.current_quantity as qty, u.name as providerName
+        FROM food_items f
+        JOIN users u ON f.provider_id = u.id
+        WHERE f.status = 'AVAILABLE' 
+        AND f.current_quantity > 0
+        AND f.expiry_time <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
+        AND f.expiry_time > NOW()
+        ORDER BY f.expiry_time ASC
+        LIMIT 5
+    `);
+
+    // 9. Recent Activities from DB (last 10 mixed)
+    const [recentClaimRows] = await db.query(`
+        SELECT 'claim' as type, c.id, f.name as foodName, u_prov.name as actorName, 
+               c.created_at as date, c.status,
+               CASE WHEN c.status = 'COMPLETED' THEN 'Transaksi Selesai'
+                    WHEN c.status = 'IN_PROGRESS' THEN 'Klaim Diproses'
+                    ELSE 'Klaim Baru' END as description
+        FROM claims c 
+        JOIN food_items f ON c.food_id = f.id
+        JOIN users u_prov ON f.provider_id = u_prov.id
+        ORDER BY c.created_at DESC LIMIT 5
+    `);
+    const [recentFoodRows] = await db.query(`
+        SELECT 'food' as type, f.id, f.name as foodName, u.name as actorName,
+               f.created_at as date, 'AVAILABLE' as status,
+               CONCAT('Stok: ', f.current_quantity, ' porsi') as description
+        FROM food_items f
+        JOIN users u ON f.provider_id = u.id
+        ORDER BY f.created_at DESC LIMIT 5
+    `);
+    const [recentUserRows] = await db.query(`
+        SELECT 'user' as type, u.id, u.name as foodName, u.name as actorName,
+               u.created_at as date, u.role as status,
+               CONCAT('Role: ', u.role) as description
+        FROM users u
+        ORDER BY u.created_at DESC LIMIT 5
+    `);
+    const [recentReportRows] = await db.query(`
+        SELECT 'report' as type, r.id, COALESCE(r.category, 'Laporan') as foodName,
+               u.name as actorName,
+               r.created_at as date, r.status,
+               COALESCE(r.description, 'Laporan baru masuk') as description
+        FROM reports r
+        JOIN users u ON r.reporter_id = u.id
+        ORDER BY r.created_at DESC LIMIT 3
+    `);
+
+    // Merge and sort all activities
+    const allActivities = [...recentClaimRows, ...recentFoodRows, ...recentUserRows, ...recentReportRows]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 8);
+
+    // Build sparkline data for stat cards (last 7 days)
+    const dayLabels = [];
+    const wasteSparkline = new Array(7).fill(0);
+    const co2Sparkline = new Array(7).fill(0);
+    const claimSparkline = new Array(7).fill(0);
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+        dayLabels.push(dayNames[d.getDay()]);
+    }
+    trendRows.forEach(r => {
+        const rd = new Date(r.date);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - rd.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0 && diffDays < 7) {
+            const idx = 6 - diffDays;
+            wasteSparkline[idx] = Number(r.wasteKg);
+            co2Sparkline[idx] = Number(r.co2Kg);
+            claimSparkline[idx] = Number(r.transactions);
+        }
+    });
+
+    return {
+        stats: {
+            totalSavedKg: parseFloat(Number(impact.totalSavedKg || 0).toFixed(1)),
+            totalCo2Saved: parseFloat(Number(impact.totalCo2Saved || 0).toFixed(1)),
+            uniqueBeneficiaries: Number(impact.uniqueBeneficiaries) || 0,
+            completedClaims: Number(impact.completedClaims) || 0,
+            totalClaims,
+            activeInventory,
+            totalUsers,
+            pendingReports,
+            totalReports: Number(reports.total) || 0,
+        },
+        usersByRole,
+        topDonors: topDonorRows.map(d => ({
+            id: d.id,
+            name: d.name,
+            avatar: d.avatar,
+            totalDonations: Number(d.totalDonations),
+            totalKg: parseFloat(Number(d.totalKg).toFixed(1))
+        })),
+        trend: {
+            labels: dayLabels,
+            wasteSparkline,
+            co2Sparkline,
+            claimSparkline,
+            growthPercent: growthPercent ? parseFloat(growthPercent) : null
+        },
+        expiringSoon: expiringRows,
+        recentActivities: allActivities
+    };
+}
+
+async function getAdminImpact(period = 'harian') {
+    let labels = [];
+    let wasteData = [];
+    let socialData = [];
+    let co2Data = [];
+
+    if (period === 'harian') {
+        const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            labels.push(dayNames[d.getDay()]);
+        }
+
+        const [rows] = await db.query(`
+            SELECT 
+                DATE(c.created_at) as date,
+                COALESCE(SUM(si.co2_per_portion * c.claimed_quantity * 0.45), 0) as wasteKg,
+                COALESCE(SUM(si.co2_per_portion * c.claimed_quantity), 0) as co2Kg,
+                COUNT(c.id) as transactions
+            FROM claims c
+            JOIN food_items f ON c.food_id = f.id
+            LEFT JOIN social_impacts si ON f.id = si.food_id
+            WHERE c.status = 'COMPLETED'
+            AND c.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+            GROUP BY DATE(c.created_at)
+            ORDER BY date
+        `);
+
+        wasteData = new Array(7).fill(0);
+        socialData = new Array(7).fill(0);
+        co2Data = new Array(7).fill(0);
+
+        rows.forEach(r => {
+            const rd = new Date(r.date);
+            const now = new Date();
+            const diffDays = Math.floor((now.getTime() - rd.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays >= 0 && diffDays < 7) {
+                const idx = 6 - diffDays;
+                wasteData[idx] = parseFloat(Number(r.wasteKg).toFixed(1));
+                co2Data[idx] = parseFloat(Number(r.co2Kg).toFixed(1));
+                socialData[idx] = Number(r.transactions);
+            }
+        });
+
+    } else if (period === 'bulanan') {
+        labels = ['Mg 1', 'Mg 2', 'Mg 3', 'Mg 4'];
+        const [rows] = await db.query(`
+            SELECT 
+                FLOOR((DAY(c.created_at) - 1) / 7) as weekIdx,
+                COALESCE(SUM(si.co2_per_portion * c.claimed_quantity * 0.45), 0) as wasteKg,
+                COALESCE(SUM(si.co2_per_portion * c.claimed_quantity), 0) as co2Kg,
+                COUNT(c.id) as transactions
+            FROM claims c
+            JOIN food_items f ON c.food_id = f.id
+            LEFT JOIN social_impacts si ON f.id = si.food_id
+            WHERE c.status = 'COMPLETED'
+            AND MONTH(c.created_at) = MONTH(CURRENT_DATE())
+            AND YEAR(c.created_at) = YEAR(CURRENT_DATE())
+            GROUP BY weekIdx
+            ORDER BY weekIdx
+        `);
+
+        wasteData = new Array(4).fill(0);
+        socialData = new Array(4).fill(0);
+        co2Data = new Array(4).fill(0);
+
+        rows.forEach(r => {
+            const idx = Math.min(Number(r.weekIdx), 3);
+            wasteData[idx] = parseFloat(Number(r.wasteKg).toFixed(1));
+            co2Data[idx] = parseFloat(Number(r.co2Kg).toFixed(1));
+            socialData[idx] = Number(r.transactions);
+        });
+
+    } else if (period === 'tahunan') {
+        labels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const [rows] = await db.query(`
+            SELECT 
+                MONTH(c.created_at) as monthIdx,
+                COALESCE(SUM(si.co2_per_portion * c.claimed_quantity * 0.45), 0) as wasteKg,
+                COALESCE(SUM(si.co2_per_portion * c.claimed_quantity), 0) as co2Kg,
+                COUNT(c.id) as transactions
+            FROM claims c
+            JOIN food_items f ON c.food_id = f.id
+            LEFT JOIN social_impacts si ON f.id = si.food_id
+            WHERE c.status = 'COMPLETED'
+            AND YEAR(c.created_at) = YEAR(CURRENT_DATE())
+            GROUP BY monthIdx
+            ORDER BY monthIdx
+        `);
+
+        wasteData = new Array(12).fill(0);
+        socialData = new Array(12).fill(0);
+        co2Data = new Array(12).fill(0);
+
+        rows.forEach(r => {
+            const idx = Number(r.monthIdx) - 1;
+            wasteData[idx] = parseFloat(Number(r.wasteKg).toFixed(1));
+            co2Data[idx] = parseFloat(Number(r.co2Kg).toFixed(1));
+            socialData[idx] = Number(r.transactions);
+        });
+    }
+
+    return { labels, wasteData, socialData, co2Data };
+}
+
+async function getAdminTargets() {
+    const [rows] = await db.query('SELECT * FROM admin_targets');
+    return rows;
+}
+
+async function updateAdminTarget(metricKey, value) {
+    await db.query('UPDATE admin_targets SET target_value = ? WHERE metric_key = ?', [value, metricKey]);
+    return { metricKey, value };
+}
+
+async function upsertFAQ(faq) {
+    const { id, category, question, answer } = faq;
+    // If ID starts with 'faq-', it's a temporary frontend ID, so we treat it as new (null)
+    const dbId = typeof id === 'string' && id.startsWith('faq-') ? null : id;
+
+    if (dbId) {
+        await db.query(
+            'UPDATE faqs SET category = ?, question = ?, answer = ? WHERE id = ?',
+            [category, question, answer, dbId]
+        );
+        return { ...faq, id: dbId };
+    } else {
+        const [result] = await db.query(
+            'INSERT INTO faqs (category, question, answer) VALUES (?, ?, ?)',
+            [category, question, answer]
+        );
+        return { ...faq, id: result.insertId };
+    }
+}
+
+async function deleteFAQ(id) {
+    await db.query('DELETE FROM faqs WHERE id = ?', [id]);
+    return { id, success: true };
+}
+
+async function assignVolunteer(claimId, volunteerId, volunteerName) {
+    await db.query(
+        `UPDATE claims 
+         SET volunteer_id = ?, 
+             courier_name = ?, 
+             status = 'IN_PROGRESS', 
+             courier_status = 'picking_up' 
+         WHERE id = ?`,
+        [volunteerId, volunteerName, claimId]
+    );
+    return { claimId, volunteerId, volunteerName, status: 'IN_PROGRESS' };
+}
+
+async function getAdmins() {
+    const [rows] = await db.query('SELECT id, name, email, role, status, created_at, permissions FROM users WHERE role IN ("ADMIN", "SUPER_ADMIN")');
+    return rows.map(u => {
+        const reverseRole = Object.keys(ROLE_MAP).find(key => ROLE_MAP[key] === u.role);
+        return {
+            ...u,
+            role: reverseRole || u.role,
+            permissions: u.permissions ? (typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions) : [],
+            lastLogin: 'Aktif'
+        };
+    });
+}
+
+async function getSystemLogs() {
+    const [rows] = await db.query('SELECT * FROM system_logs ORDER BY timestamp DESC LIMIT 100');
+    return rows;
+}
+
+async function upsertAdmin(adminData, actor) {
+    const { id, name, email, password, role, status, permissions } = adminData;
+    const mappedRole = mapRole(role);
+    const permsJson = JSON.stringify(permissions || []);
+
+    if (id && !String(id).startsWith('temp-')) {
+        // Update
+        const updates = ['name = ?', 'email = ?', 'role = ?', 'status = ?', 'permissions = ?'];
+        const values = [name, email, mappedRole, status.toUpperCase(), permsJson];
+        
+        if (password) {
+            updates.push('password = ?');
+            values.push(password);
+        }
+        
+        values.push(id);
+        await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
+        await logAction(actor?.id, actor?.name, 'Edit Admin', `Update data admin: ${name} (${role})`);
+        return { ...adminData, id };
+    } else {
+        // Insert
+        const [result] = await db.query(
+            'INSERT INTO users (name, email, password, role, status, permissions, points) VALUES (?, ?, ?, ?, ?, ?, 0)',
+            [name, email, password, mappedRole, status.toUpperCase(), permsJson]
+        );
+        await logAction(actor?.id, actor?.name, 'Add Admin', `Tambah admin baru: ${name} (${role})`);
+        return { ...adminData, id: result.insertId };
+    }
+}
+
+async function deleteAdmin(id, actor) {
+    await db.query('DELETE FROM users WHERE id = ?', [id]);
+    await logAction(actor?.id, actor?.name, 'Delete Admin', `Hapus admin ID: ${id}`, 'critical');
+    return { id, success: true };
+}
+
+async function getBroadcasts() {
+    const [rows] = await db.query('SELECT * FROM broadcasts ORDER BY created_at DESC');
+    return rows.map(r => ({
+        ...r,
+        sentAt: new Date(r.created_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+    }));
+}
+
+async function sendBroadcast(msgData, actor) {
+    const { title, content, target, type } = msgData;
+    const [result] = await db.query(
+        'INSERT INTO broadcasts (title, content, target, type, author_id) VALUES (?, ?, ?, ?, ?)',
+        [title, content, target, type || 'info', actor?.id]
+    );
+    
+    await logAction(actor?.id, actor?.name, 'Send Broadcast', `Kirim pengumuman: ${title} (Target: ${target})`);
+    
+    return { ...msgData, id: result.insertId, status: 'sent', sentAt: 'Baru saja', readCount: 0 };
 }
 
 app.listen(port, () => {

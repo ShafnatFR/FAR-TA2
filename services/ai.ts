@@ -38,11 +38,101 @@ export interface QualityAnalysisResult {
   socialImpact: DetailedSocialImpact;
 }
 
-const getAI = () => {
-  // Gunakan import.meta.env untuk Vite
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
-  return new GoogleGenAI({ apiKey: apiKey || '', apiVersion: 'v1' });
+// ==========================================
+// API KEY ROTATION SYSTEM
+// ==========================================
+
+/** Collect all VITE_GEMINI_API_KEY* from environment */
+const getAllApiKeys = (): string[] => {
+  const keys: string[] = [];
+  const env = import.meta.env;
+  
+  // Primary key
+  if (env.VITE_GEMINI_API_KEY) keys.push(env.VITE_GEMINI_API_KEY);
+  
+  // Numbered keys (VITE_GEMINI_API_KEY_2, _3, _4, ...)
+  for (let i = 2; i <= 50; i++) {
+    const key = env[`VITE_GEMINI_API_KEY_${i}`];
+    if (key) keys.push(key);
+  }
+  
+  // Deduplicate
+  const unique = [...new Set(keys)];
+  console.log(`%c[AI KEY POOL] ${unique.length} API key(s) tersedia`, 'color: #8B5CF6; font-weight: bold;');
+  return unique;
 };
+
+const API_KEYS = getAllApiKeys();
+const failedKeys = new Set<string>(); // Blacklisted keys for this session
+let currentKeyIndex = 0;
+
+/** Get the next working API key, skipping failed ones */
+const getNextWorkingKey = (): string | null => {
+  const totalKeys = API_KEYS.length;
+  
+  for (let attempt = 0; attempt < totalKeys; attempt++) {
+    const idx = (currentKeyIndex + attempt) % totalKeys;
+    const key = API_KEYS[idx];
+    
+    if (!failedKeys.has(key)) {
+      currentKeyIndex = idx;
+      return key;
+    }
+  }
+  
+  // All keys exhausted — reset and try again from beginning
+  console.warn('[AI KEY POOL] Semua key gagal, mereset blacklist...');
+  failedKeys.clear();
+  return API_KEYS[0] || null;
+};
+
+/** Mark a key as failed and advance to next */
+const markKeyAsFailed = (key: string): void => {
+  failedKeys.add(key);
+  currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+  const remaining = API_KEYS.length - failedKeys.size;
+  console.warn(`%c[AI KEY POOL] Key ...${key.slice(-6)} GAGAL. Sisa ${remaining} key tersedia.`, 'color: #EF4444; font-weight: bold;');
+};
+
+/** Check if an error is a KEY-SPECIFIC problem (should blacklist the key) */
+const isKeySpecificError = (error: any): boolean => {
+  const msg = String(error?.message || error || '').toLowerCase();
+  const code = error?.status || error?.code || error?.error?.code;
+  
+  return (
+    code === 403 || code === 429 ||
+    msg.includes('permission_denied') ||
+    msg.includes('leaked') ||
+    msg.includes('api_key_invalid') ||
+    msg.includes('quota') ||
+    msg.includes('forbidden') ||
+    msg.includes('resource_exhausted')
+  );
+};
+
+/** Check if an error is transient/server-side (should retry with next key but NOT blacklist) */
+const isTransientError = (error: any): boolean => {
+  const msg = String(error?.message || error || '').toLowerCase();
+  const code = error?.status || error?.code || error?.error?.code;
+  
+  return (
+    code === 500 || code === 502 || code === 503 || code === 504 ||
+    msg.includes('unavailable') ||
+    msg.includes('overloaded') ||
+    msg.includes('high demand') ||
+    msg.includes('internal') ||
+    msg.includes('temporarily') ||
+    msg.includes('try again') ||
+    msg.includes('deadline exceeded') ||
+    msg.includes('econnreset') ||
+    msg.includes('econnrefused') ||
+    msg.includes('fetch failed')
+  );
+};
+
+// ==========================================
+// EMISSION & SOCIAL IMPACT FACTORS
+// ==========================================
 
 // Faktor Emisi CO2e per Kg (LCA Standard Approximation)
 const EMISSION_FACTORS: Record<string, number> = {
@@ -160,6 +250,10 @@ const calculateDetailedImpact = (
   };
 };
 
+// ==========================================
+// MAIN AI ANALYSIS FUNCTION (WITH KEY ROTATION)
+// ==========================================
+
 export const analyzeFoodQuality = async (
   inputLabels: string[],
   imageBase64?: string,
@@ -171,139 +265,182 @@ export const analyzeFoodQuality = async (
     weightGram: number;
     packagingType: string;
     distributionStart: string;
-    quantityCount?: number; // Tambahan parameter jumlah porsi
+    quantityCount?: number;
   }
 ): Promise<QualityAnalysisResult> => {
-  try {
-    const ai = getAI();
 
-    // Log daftar model yang TERSEDIA untuk API Key Anda
-    try {
-      const result = await ai.models.list();
-      // Mengambil nama model dari hasil list
-      const modelNames = (result as any).pageInternal?.map((m: any) => m.name) || [];
-      console.log("%c[AI SERVICE] Model yang bisa Anda gunakan:", "color: cyan; font-weight: bold;", modelNames);
-    } catch (e) {
-      console.log("[AI SERVICE] Gagal melist model, lanjut ke analisis...");
-    }
-
-    const parts: any[] = [];
-    if (imageBase64) {
-      const base64Data = imageBase64.split(',')[1] || imageBase64;
-      parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
-    }
-
-    const prompt = `
-      Anda adalah Senior Food Safety Auditor & Environmental Analyst.
-      
-      DATA INPUT:
-      - Nama: ${context?.foodName}
-      - Bahan: ${context?.ingredients}
-      - Waktu Masak: ${context?.madeTime}
-      - Berat Total: ${context?.weightGram} gram
-      
-      TUGAS 1: Klasifikasikan bahan-bahan utama yang terlihat atau tertulis ke dalam kategori LCA (Life Cycle Assessment) berikut:
-      - 'Daging Merah' (Sapi, Kambing)
-      - 'Unggas & Telur' (Ayam, Bebek, Telur)
-      - 'Ikan & Seafood'
-      - 'Karbohidrat' (Nasi, Roti, Mie, Kentang)
-      - 'Sayur & Buah'
-      - 'Lainnya' (Bumbu, Kuah, Tahu/Tempe masuk sini)
-
-      TUGAS 2: Audit Keamanan Pangan (Microbiology Risk).
-      - Analisis selisih waktu masak vs distribusi.
-      - Berikan skor 'qualityPercentage' (0-100). Di bawah 70 = REJECT.
-
-      OUTPUT JSON (Strict Type):
-      {
-        "isSafe": boolean,
-        "isHalal": boolean,
-        "halalScore": integer (0-100),
-        "reasoning": string,
-        "hygieneScore": integer (0-100),
-        "qualityPercentage": integer (0-100),
-        "detectedItems": [
-           { "name": "Nama Bahan (misal: Nasi Putih)", "category": "Karbohidrat" },
-           { "name": "Nama Bahan (misal: Ayam Goreng)", "category": "Unggas & Telur" }
-        ],
-        "shelfLifePrediction": string (e.g. "3 Jam"),
-        "storageTips": [string]
-      }
-    `;
-
-// services/ai.ts
-
-const schema = {
-  type: Type.OBJECT, // Gunakan enum Type, bukan string "OBJECT"
-  properties: {
-    isSafe: { type: Type.BOOLEAN },
-    isHalal: { type: Type.BOOLEAN },
-    halalScore: { type: Type.INTEGER },
-    reasoning: { type: Type.STRING },
-    hygieneScore: { type: Type.INTEGER },
-    qualityPercentage: { type: Type.INTEGER },
-    detectedItems: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          name: { type: Type.STRING },
-          category: { type: Type.STRING }
-        },
-        required: ["name", "category"]
-      }
-    },
-    shelfLifePrediction: { type: Type.STRING },
-    storageTips: { type: Type.ARRAY, items: { type: Type.STRING } }
-  },
-  required: ["isSafe", "qualityPercentage", "detectedItems"]
-};
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash', // Model paling stabil di v1
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }, ...parts]
-        }
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: schema as any
-      }
-    });
-
-    const aiResult = JSON.parse(response.text || '{}');
-
-    // Kalkulasi Dampak Mendetail (Updated Logic)
-    const socialImpact = calculateDetailedImpact(
-      aiResult.detectedItems || [],
-      context?.weightGram || 500,
-      context?.packagingType || 'plastic',
-      context?.quantityCount || 1 // Pass quantity count
-    );
-
-    return {
-      ...aiResult,
-      detectedCategory: aiResult.detectedItems?.[0]?.category || 'Lainnya',
-      socialImpact
-    };
-  } catch (error: any) {
-    console.error("AI Analysis Error:", error);
-    // Fallback Result
-    const fallbackItems: DetectedItem[] = [{ name: context?.foodName || "Makanan", category: "Lainnya" }];
-    const fallbackImpact = calculateDetailedImpact(
-      fallbackItems,
-      context?.weightGram || 500,
-      'plastic',
-      context?.quantityCount || 1
-    );
-
-    return {
-      isSafe: true, isHalal: true, halalScore: 80, halalReasoning: "Fallback analysis", reasoning: "Analisis AI terkendala, menggunakan estimasi standar.",
-      shelfLifePrediction: "4 Jam", hygieneScore: 80, qualityPercentage: 80,
-      detectedItems: fallbackItems, detectedCategory: 'Lainnya', storageTips: ["Simpan di tempat kering"],
-      socialImpact: fallbackImpact
-    };
+  const parts: any[] = [];
+  if (imageBase64) {
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
   }
+
+  const prompt = `
+    Anda adalah Senior Food Safety Auditor & Environmental Analyst.
+       DATA INPUT:
+    - Nama Makanan: ${context?.foodName}
+    - Bahan: ${context?.ingredients}
+    - Waktu Masak: ${context?.madeTime}
+    - Waktu Mulai Distribusi: ${context?.distributionStart}
+    - Berat Total: ${context?.weightGram} gram
+    
+    KRITERIA AUDIT KETAT (GOLDEN RULES):
+    1. VALIDASI DATA: Jika nama makanan atau bahan terlihat seperti data acak/ngawur (misal: "asdf", "abcd", "tes"), WAJIB berikan 'isSafe: false' dan 'qualityPercentage: 0'.
+    2. ATURAN 4 JAM (TIME-GAP): Makanan matang hanya aman di suhu ruang maksimal 4 jam. 
+       - Jika (Waktu Distribusi - Waktu Masak) > 4 jam: Berikan peringatan keras dan kurangi skor drastis.
+       - Jika (Waktu Distribusi - Waktu Masak) > 8 jam: WAJIB berikan 'isSafe: false' dan 'qualityPercentage < 20'.
+    3. VISUAL CONSISTENCY: Nama makanan dan bahan harus sinkron dengan apa yang terlihat di foto. Jika tertulis "Ayam" tapi foto "Sayur", berikan penalti skor.
+    4. ALERGEN: Deteksi semua potensi alergen. Jika ditemukan elemen seperti Telur (Egg), Susu (Milk/Dairy), Seafood (Udang/Ikan/Cumi/Kerang), Kacang (Peanuts/Nuts), Gandum (Wheat/Gluten), atau Kedelai (Soy/Tofu/Tempe), Anda WAJIB memasukkannya ke daftar 'detectedAllergens'.
+    
+    TUGAS 1: Klasifikasikan bahan ke kategori LCA (Daging Merah, Unggas & Telur, Ikan & Seafood, Karbohidrat, Sayur & Buah, Lainnya).
+    TUGAS 2: Audit Keamanan (Microbiology Risk) berdasarkan selisih waktu.
+    TUGAS 3: PEMISAHAN ALERGEN. Pastikan semua item yang mengandung alergen masuk ke 'detectedAllergens'.
+
+    OUTPUT JSON (Strict Type):
+    {
+      "isSafe": boolean,
+      "isHalal": boolean,
+      "halalScore": integer (0-100),
+      "reasoning": string (Berikan alasan teknis termasuk analisis waktu),
+      "hygieneScore": integer (0-100),
+      "qualityPercentage": integer (0-100),
+      "detectedItems": [
+         { "name": "Bahan", "category": "Kategori" }
+      ],
+      "detectedAllergens": [string],
+      "shelfLifePrediction": string (misal: "2 Jam lagi"),
+      "storageTips": [string]
+    }
+  `;
+
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      isSafe: { type: Type.BOOLEAN },
+      isHalal: { type: Type.BOOLEAN },
+      halalScore: { type: Type.INTEGER },
+      reasoning: { type: Type.STRING },
+      hygieneScore: { type: Type.INTEGER },
+      qualityPercentage: { type: Type.INTEGER },
+      detectedItems: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            category: { type: Type.STRING }
+          },
+          required: ["name", "category"]
+        }
+      },
+      detectedAllergens: { type: Type.ARRAY, items: { type: Type.STRING } },
+      shelfLifePrediction: { type: Type.STRING },
+      storageTips: { type: Type.ARRAY, items: { type: Type.STRING } }
+    },
+    required: ["isSafe", "qualityPercentage", "detectedItems", "detectedAllergens"]
+  };
+
+  // ===== RETRY LOOP WITH KEY ROTATION =====
+  const maxAttempts = API_KEYS.length;
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const apiKey = getNextWorkingKey();
+    
+    if (!apiKey) {
+      console.error('[AI SERVICE] Tidak ada API key yang tersedia!');
+      break;
+    }
+    
+    const keyLabel = `...${apiKey.slice(-6)}`;
+    console.log(
+      `%c[AI SERVICE] Attempt ${attempt + 1}/${maxAttempts} — Key ${keyLabel}`,
+      'color: #3B82F6; font-weight: bold;'
+    );
+
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }, ...parts]
+          }
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema as any
+        }
+      });
+
+      const aiResult = JSON.parse(response.text || '{}');
+
+      console.log(
+        `%c[AI SERVICE] ✅ Berhasil dengan key ${keyLabel}`,
+        'color: #10B981; font-weight: bold;'
+      );
+
+      // Kalkulasi Dampak Mendetail
+      const socialImpact = calculateDetailedImpact(
+        aiResult.detectedItems || [],
+        context?.weightGram || 500,
+        context?.packagingType || 'plastic',
+        context?.quantityCount || 1
+      );
+
+      return {
+        ...aiResult,
+        detectedCategory: aiResult.detectedItems?.[0]?.category || 'Lainnya',
+        socialImpact
+      };
+
+    } catch (error: any) {
+      lastError = error;
+      
+      if (isKeySpecificError(error)) {
+        // Key problem (leaked, quota, forbidden) — blacklist and try next
+        console.warn(
+          `%c[AI SERVICE] ❌ Key ${keyLabel} gagal (KEY ERROR): ${error.message?.substring(0, 80)}`,
+          'color: #F59E0B; font-weight: bold;'
+        );
+        markKeyAsFailed(apiKey);
+        continue; // Try next key
+      } else if (isTransientError(error)) {
+        // Server overloaded / temporarily unavailable — try next key WITHOUT blacklisting
+        console.warn(
+          `%c[AI SERVICE] ⚠️ Key ${keyLabel} — server error (503/transient): ${error.message?.substring(0, 80)}`,
+          'color: #F97316; font-weight: bold;'
+        );
+        // Advance to next key without blacklisting (key itself is fine)
+        currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+        // Small delay before retrying to give server breathing room
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        continue; // Try next key
+      } else {
+        // Truly non-retryable error (parsing, network down, etc.)
+        console.error(`[AI SERVICE] Error fatal non-retryable:`, error);
+        break;
+      }
+    }
+  }
+
+  // ===== ALL KEYS EXHAUSTED — FALLBACK =====
+  console.error('[AI SERVICE] Semua API key gagal. Menggunakan fallback.', lastError);
+  
+  const fallbackItems: DetectedItem[] = [{ name: context?.foodName || "Makanan", category: "Lainnya" }];
+  const fallbackImpact = calculateDetailedImpact(
+    fallbackItems,
+    context?.weightGram || 500,
+    'plastic',
+    context?.quantityCount || 1
+  );
+
+  return {
+    isSafe: true, isHalal: true, halalScore: 80, halalReasoning: "Fallback analysis", reasoning: "Semua API key Gemini gagal. Menggunakan estimasi standar.",
+    shelfLifePrediction: "4 Jam", hygieneScore: 80, qualityPercentage: 80,
+    detectedItems: fallbackItems, detectedCategory: 'Lainnya', storageTips: ["Simpan di tempat kering"],
+    socialImpact: fallbackImpact
+  };
 };

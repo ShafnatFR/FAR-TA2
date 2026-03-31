@@ -16,7 +16,7 @@ interface SystemSetting {
     unit?: string;
 }
 
-export const SystemConfig: React.FC<{ appSettings?: any, setAppSettings?: any }> = ({ appSettings, setAppSettings }) => {
+export const SystemConfig: React.FC<{ appSettings?: any, setAppSettings?: any, currentUser?: any }> = ({ appSettings, setAppSettings, currentUser }) => {
     const [settings, setSettings] = useState<SystemSetting[]>([
         // Emergency Controls
         { id: 'maintenance', name: 'Maintenance Mode', description: 'Matikan semua akses user sementara.', value: false, type: 'toggle', category: 'emergency' },
@@ -55,7 +55,7 @@ export const SystemConfig: React.FC<{ appSettings?: any, setAppSettings?: any }>
         };
 
         try {
-            const updated = await db.updateSettings(settingsToUpdate);
+            const updated = await db.updateSettings(settingsToUpdate, currentUser);
             if (setAppSettings) setAppSettings(updated);
             setHasChanges(false);
             setSuccessMessage('Konfigurasi berhasil disimpan!');

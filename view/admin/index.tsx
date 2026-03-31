@@ -69,18 +69,7 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <Overview 
-                  onNavigate={setActiveTab} 
-                  stats={{
-                      usersCount: globalUsers.length,
-                      claimsCount: globalClaims.length,
-                      inventoryCount: globalInventory.length,
-                      reportsCount: globalClaims.filter(c => c.isReported && c.reportId && c.reportStatus?.toUpperCase() !== 'RESOLVED' && c.reportStatus?.toUpperCase() !== 'REJECTED').length
-                  }}
-                  claims={globalClaims}
-                  inventory={globalInventory}
-                  users={globalUsers}
-               />;
+        return <Overview onNavigate={setActiveTab} />;
       case 'community':
         return <Community 
                   users={globalUsers} 
@@ -91,27 +80,19 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
       case 'moderation':
         return <Moderation claims={globalClaims} onReportUpdate={() => onRefresh && onRefresh()} />;
       case 'distribution':
-        return <Distribution claims={globalClaims} users={globalUsers} inventory={globalInventory} allAddresses={allAddresses} />;
+        return <Distribution claims={globalClaims} users={globalUsers} inventory={globalInventory} allAddresses={allAddresses} onRefresh={() => onRefresh && onRefresh()} currentUser={currentUser} />;
       case 'impact':
-        return <Impact claims={globalClaims} />;
+        return <Impact currentUser={currentUser} />;
       case 'communication':
-        return <Communication broadcastMessages={broadcastMessages} setBroadcastMessages={setBroadcastMessages} />;
+        return <Communication broadcastMessages={broadcastMessages} setBroadcastMessages={setBroadcastMessages} onRefresh={() => onRefresh && onRefresh()} currentUser={currentUser} />;
       case 'content':
-        return <ContentCMS faqs={globalFAQs} setFaqs={setGlobalFAQs} />;
+        return <ContentCMS faqs={globalFAQs} setFaqs={setGlobalFAQs} onRefresh={() => onRefresh && onRefresh()} currentUser={currentUser} />;
       case 'admins':
-        return <AdminList />;
+        return <AdminList currentUser={currentUser} onMenuRefresh={() => onRefresh && onRefresh()} />;
       case 'settings':
-        return <SystemConfig appSettings={appSettings} setAppSettings={setAppSettings} />;
+        return <SystemConfig appSettings={appSettings} setAppSettings={setAppSettings} currentUser={currentUser} />;
       default:
-        return <Overview 
-                  onNavigate={setActiveTab} 
-                  stats={{
-                      usersCount: globalUsers.length,
-                      claimsCount: globalClaims.length,
-                      inventoryCount: globalInventory.length,
-                      reportsCount: globalClaims.filter(c => c.isReported).length
-                  }}
-               />;
+        return <Overview onNavigate={setActiveTab} currentUser={currentUser} />;
     }
   };
 

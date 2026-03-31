@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { Truck, ArrowRight, MapPin, X, Navigation, MessageCircle, ArrowDown, CheckCircle2, Clock, PackageCheck, UserCheck, Phone, Box, ShieldCheck, Bike, Car } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Truck, ArrowRight, MapPin, X, Navigation, MessageCircle, ArrowDown, CheckCircle2, Clock, PackageCheck, UserCheck, Phone, Box, ShieldCheck, Bike, Car, Loader2, Search, Users } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { DistributionTask, ClaimHistoryItem, UserData, FoodItem, Address } from '../../../types';
 
@@ -32,18 +32,33 @@ interface DistributionProps {
     users?: UserData[]; // Users data for phone lookup
     inventory?: FoodItem[]; // Inventory for ingredients lookup
     allAddresses?: Address[];
+    onRefresh?: () => void;
+    currentUser?: UserData | null;
 }
 
-export const Distribution: React.FC<DistributionProps> = ({ claims = [], users = [], inventory = [], allAddresses = [] }) => {
+export const Distribution: React.FC<DistributionProps> = ({ claims = [], users = [], inventory = [], allAddresses = [], onRefresh, currentUser }) => {
   const [activeDeliveries, setActiveDeliveries] = useState<ExtendedDistributionTask[]>([]);
   const [showAssignVolunteerModal, setShowAssignVolunteerModal] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState<ExtendedDistributionTask | null>(null);
+  const [isAssigning, setIsAssigning] = useState<string | null>(null);
+  const [volunteerSearch, setVolunteerSearch] = useState('');
+
+  // Filter Real Volunteers from users list
+  const availableVolunteers = useMemo(() => {
+      const volds = users.filter(u => 
+        (u.role === 'RELAWAN' || u.role === 'volunteer') && 
+        u.status?.toLowerCase() === 'active'
+      );
+      
+      if (!volunteerSearch.trim()) return volds;
+      return volds.filter(v => v.name.toLowerCase().includes(volunteerSearch.toLowerCase()));
+  }, [users, volunteerSearch]);
 
   // Perbarui list hanya jika data claims berubah
   useEffect(() => {
       const tasks: ExtendedDistributionTask[] = claims
         // FILTER: Hanya tampilkan yang deliveryMethod-nya 'delivery'
-        .filter(c => c.deliveryMethod === 'delivery')
+        .filter(c => c.deliveryMethod === 'delivery' || c.deliveryMethod === 'BOTH')
         .map(c => {
             // 1. Lookup Provider Info
             const providerUser = users.find(u => String(u.id).trim() === String(c.providerId).trim());
@@ -98,12 +113,23 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
             };
         });
       setActiveDeliveries(tasks);
-  }, [claims, users, inventory]);
+  }, [claims, users, inventory, allAddresses]);
 
-  const handleAssignVolunteer = (taskId: string, volunteerName: string) => {
-      setActiveDeliveries(prev => prev.map(d => d.id === taskId ? { ...d, volunteer: volunteerName, status: 'picking_up' } : d));
-      setShowAssignVolunteerModal(null);
-      alert(`Tugas berhasil diberikan kepada ${volunteerName}`);
+  const handleAssignVolunteer = async (claimId: string, volunteer: UserData) => {
+      setIsAssigning(volunteer.id);
+      try {
+          const { db } = await import('../../../services/db');
+          await db.assignVolunteer(claimId, volunteer.id, volunteer.name, currentUser);
+          
+          if (onRefresh) onRefresh();
+          setShowAssignVolunteerModal(null);
+          setVolunteerSearch('');
+      } catch (err) {
+          console.error("Assignment failed:", err);
+          alert("Gagal menugaskan relawan. Silakan coba lagi.");
+      } finally {
+          setIsAssigning(null);
+      }
   };
 
   // Helper untuk membuka WhatsApp
@@ -126,27 +152,21 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
   };
 
   // REAL-TIME LOOKUP FUNCTION
-  // Mencari data relawan langsung dari array 'users' saat tombol diklik
   const getVolunteerPhone = (name: string, id?: string): string => {
-      // 1. Try Exact ID Match
       if (id) {
           const userById = users.find(u => String(u.id).trim() === String(id).trim());
           if (userById && userById.phone) return userById.phone;
       }
-
-      // 2. Try Exact Name Match
       if (name) {
           const userByName = users.find(u => u.name.trim().toLowerCase() === name.trim().toLowerCase());
           if (userByName && userByName.phone) return userByName.phone;
           
-          // 3. Try Fuzzy Name Match (Contains) - Handle "Budi" vs "Budi Santoso"
           const userByFuzzy = users.find(u => 
               u.name.toLowerCase().includes(name.toLowerCase()) || 
               name.toLowerCase().includes(u.name.toLowerCase())
           );
           if (userByFuzzy && userByFuzzy.phone) return userByFuzzy.phone;
       }
-
       return "";
   };
 
@@ -224,7 +244,7 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
                                     <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Relawan</p>
                                     <p className="text-xs font-black text-stone-700 dark:text-stone-300 uppercase italic">{task.volunteer}</p>
                                 </div>
-                                {task.volunteer !== 'Belum Ditugaskan' && (
+                                {(task.volunteer !== 'Belum Ditugaskan' && task.volunteer !== 'Selesai') && (
                                     <Button 
                                         onClick={() => handleChatVolunteer(task.volunteer, task.volunteerId)} 
                                         className="h-10 px-4 bg-[#25D366] hover:bg-[#128C7E] text-white border-none shadow-lg shadow-green-500/20 flex items-center gap-2 rounded-xl w-auto"
@@ -245,11 +265,10 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
             )}
         </div>
 
-        {/* MISSION DETAIL MODAL (TABLET OPTIMIZED) */}
+        {/* MISSION DETAIL MODAL */}
         {showDetailModal && (
             <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
                 <div className="bg-white dark:bg-stone-900 w-full max-w-4xl rounded-[2.5rem] shadow-2xl relative overflow-hidden border border-white/5 flex flex-col max-h-[90vh]">
-                    {/* Header */}
                     <div className="p-6 border-b border-stone-100 dark:border-stone-800 flex justify-between items-center bg-stone-50 dark:bg-stone-950">
                         <div>
                             <h3 className="text-xl font-black text-stone-900 dark:text-white uppercase italic tracking-tighter">Mission Control</h3>
@@ -261,7 +280,6 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 bg-[#FDFBF7] dark:bg-stone-900">
-                        {/* 1. Hero Summary */}
                         <div className="flex flex-col md:flex-row gap-6">
                             <div className="w-full md:w-1/3 aspect-square md:aspect-video rounded-3xl overflow-hidden relative shadow-lg group">
                                 <img src={showDetailModal.fullData.imageUrl} alt="Food" className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-700" />
@@ -299,12 +317,10 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
                             </div>
                         </div>
 
-                        {/* 2. Timeline & Logistics */}
                         <div className="bg-white dark:bg-stone-900 p-6 md:p-8 rounded-[2.5rem] border border-stone-200 dark:border-stone-800">
                             <h3 className="font-black text-stone-900 dark:text-white uppercase italic tracking-tighter mb-8 text-lg">Logistik & Kontak</h3>
                             
                             <div className="relative pl-4 space-y-10 border-l-2 border-dashed border-stone-200 dark:border-stone-700 ml-2">
-                                {/* Pickup Point */}
                                 <div className="relative">
                                     <div className="absolute -left-[23px] top-0 w-6 h-6 bg-orange-500 rounded-full border-4 border-white dark:border-stone-900 shadow-sm flex items-center justify-center text-[10px] text-white font-bold">1</div>
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -322,7 +338,6 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
                                     </div>
                                 </div>
 
-                                {/* Tracking Status Steps */}
                                 <div className="ml-4 p-4 bg-stone-50 dark:bg-stone-950 rounded-2xl border border-stone-100 dark:border-stone-800 space-y-4">
                                     <StatusStep 
                                         icon={<Clock className="w-4 h-4" />}
@@ -347,7 +362,6 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
                                     />
                                 </div>
 
-                                {/* Dropoff Point */}
                                 <div className="relative">
                                     <div className="absolute -left-[23px] top-0 w-6 h-6 bg-green-500 rounded-full border-4 border-white dark:border-stone-900 shadow-sm flex items-center justify-center text-[10px] text-white font-bold">2</div>
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -387,22 +401,72 @@ export const Distribution: React.FC<DistributionProps> = ({ claims = [], users =
             </div>
         )}
 
+        {/* ASSIGN VOLUNTEER MODAL */}
         {showAssignVolunteerModal && (
-            <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-stone-900 p-8 rounded-[2.5rem] w-full max-w-sm border border-stone-200 dark:border-stone-800 shadow-2xl">
-                    <h3 className="font-black text-xl mb-6 text-stone-900 dark:text-white uppercase italic tracking-tight">Pilih Relawan</h3>
-                    <div className="space-y-3">
-                        {['Budi Santoso (0.5km)', 'Siti Aminah (1.2km)'].map(vol => (
-                            <button 
-                                key={vol}
-                                onClick={() => handleAssignVolunteer(showAssignVolunteerModal, vol.split(' (')[0])} 
-                                className="w-full p-4 text-left bg-stone-50 dark:bg-stone-800 hover:bg-orange-50 dark:hover:bg-orange-950/20 hover:border-orange-500 border border-transparent rounded-2xl text-stone-800 dark:text-stone-200 font-bold transition-all"
-                            >
-                                {vol}
-                            </button>
-                        ))}
+            <div className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="bg-white dark:bg-stone-900 p-8 rounded-[3rem] w-full max-w-md border-2 border-orange-500/10 dark:border-white/5 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
+                            <h3 className="font-black text-2xl text-stone-900 dark:text-white uppercase italic tracking-tight">Tugaskan Relawan</h3>
+                            <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest mt-1">Sistem Logistik Food AI Rescue</p>
+                        </div>
+                        <button onClick={() => setShowAssignVolunteerModal(null)} className="p-2 text-stone-400 hover:text-stone-900 dark:hover:text-white"><X className="w-6 h-6" /></button>
                     </div>
-                    <Button variant="ghost" className="mt-6 font-black uppercase tracking-widest text-[10px]" onClick={() => setShowAssignVolunteerModal(null)}>BATALKAN</Button>
+
+                    <div className="space-y-6">
+                        {/* Search Box */}
+                        <div className="relative group">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 group-focus-within:text-orange-500 transition-colors" />
+                            <input 
+                                type="text" 
+                                placeholder="Cari nama relawan..." 
+                                className="w-full pl-12 pr-4 py-4 bg-stone-100 dark:bg-stone-800 border-none rounded-2xl text-stone-800 dark:text-white font-bold text-sm focus:ring-2 focus:ring-orange-500/20 transition-all outline-none"
+                                value={volunteerSearch}
+                                onChange={(e) => setVolunteerSearch(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="space-y-2 max-h-[350px] overflow-y-auto custom-scrollbar pr-1">
+                            {availableVolunteers.length === 0 ? (
+                                <div className="text-center py-10">
+                                    <Users className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                                    <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Tidak ada relawan tersedia.</p>
+                                </div>
+                            ) : (
+                                availableVolunteers.map(vol => (
+                                    <button 
+                                        key={vol.id}
+                                        disabled={isAssigning !== null}
+                                        onClick={() => handleAssignVolunteer(showAssignVolunteerModal, vol)} 
+                                        className={`w-full p-4 flex items-center justify-between bg-stone-50 dark:bg-stone-800/50 hover:bg-orange-50 dark:hover:bg-orange-950/20 hover:border-orange-500/50 border border-transparent rounded-2xl transition-all group ${isAssigning === vol.id ? 'opacity-50' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-3 text-left">
+                                            <div className="w-10 h-10 rounded-xl overflow-hidden border border-stone-200 dark:border-stone-700 bg-white">
+                                                <img src={vol.avatar} alt={vol.name} className="w-full h-full object-cover" />
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-stone-900 dark:text-white text-sm leading-tight italic">{vol.name}</p>
+                                                <p className="text-[9px] font-bold text-stone-500 uppercase tracking-widest mt-0.5">{vol.points} Poin • Aktif</p>
+                                            </div>
+                                        </div>
+                                        {isAssigning === vol.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                                        ) : (
+                                            <div className="bg-white dark:bg-stone-700 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm">
+                                                <ArrowRight className="w-3.5 h-3.5 text-orange-600" />
+                                            </div>
+                                        )}
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t border-stone-100 dark:border-stone-800">
+                        <Button variant="ghost" className="w-full h-14 font-black uppercase tracking-widest text-[10px] border-2 border-stone-100 dark:border-stone-800 text-stone-400" onClick={() => setShowAssignVolunteerModal(null)}>BATALKAN PENUGASAN</Button>
+                    </div>
                 </div>
             </div>
         )}
