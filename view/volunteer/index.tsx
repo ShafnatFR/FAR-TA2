@@ -25,6 +25,7 @@ interface VolunteerIndexProps {
   onRefresh?: () => void; // Refresh Prop
   globalUsers?: UserData[];
   inventory?: FoodItem[];
+  notifications?: any[]; // New Prop
 }
 
 export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({ 
@@ -37,7 +38,8 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
     isLoading: isGlobalLoading = false,
     onRefresh,
     globalUsers = [],
-    inventory = []
+    inventory = [],
+    notifications = []
 }) => {
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   
@@ -391,18 +393,6 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
       })).slice(0, 10); // Top 10
   }, [globalUsers]);
 
-  if (viewMode === 'notifications') {
-      return (
-        <NotificationsPage 
-            role="volunteer" 
-            onBack={() => setViewMode('main')} 
-            claimHistory={activeClaims} 
-            userName={userName} 
-            currentUserId={currentUser?.id} 
-        />
-      );
-  }
-
   if (selectedTask) {
       return (
         <MissionDetail 
@@ -413,7 +403,7 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
                 setSelectedTask(null); 
                 setActiveTab('active'); 
             }} 
-            volunteerName={userName} // Pass volunteer name here
+            volunteerName={userName} 
         />
       );
   }
@@ -427,7 +417,7 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
                 <Navigation className="w-5 h-5 md:w-6 md:h-6 fill-current" />
               </div>
               <div>
-                <h1 className="text-xl md:text-2xl font-black text-stone-900 dark:text-white uppercase tracking-tighter leading-none italic">Logistik Relawan</h1>
+                <h1 className="text-xl md:text-2xl font-black text-stone-900 dark:text-white uppercase tracking-tighter leading-none italic text-stone-900 dark:text-white">Logistik Relawan</h1>
                 <p className="text-[10px] md:text-xs text-stone-500 font-black uppercase tracking-widest mt-1">Sistem Distribusi Pangan</p>
               </div>
             </div>
@@ -441,7 +431,7 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
                         {isRefreshing ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
                     </button>
                 )}
-                <button onClick={() => setViewMode('notifications')} className="relative p-3 bg-stone-50 dark:bg-stone-800 rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-orange-600 transition-all shadow-inner">
+                <button onClick={onOpenNotifications} className="relative p-3 bg-stone-50 dark:bg-stone-800 rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-orange-600 transition-all shadow-inner">
                     <Bell className="w-5 h-5" />
                     <span className="absolute top-1 right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-pulse"></span>
                 </button>

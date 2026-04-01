@@ -48,9 +48,7 @@ const App: React.FC = () => {
   const [allAddresses, setAllAddresses] = useState<Address[]>([]); 
   
   const [globalUsers, setGlobalUsers] = useState<UserData[]>([]);
-
-  // Centralized Global Broadcast Data
-  const [broadcastMessages, setBroadcastMessages] = useState<BroadcastMessage[]>([]);
+  const [userNotifications, setUserNotifications] = useState<Notification[]>([]);
 
   const [globalFAQs, setGlobalFAQs] = useState<FAQItem[]>([
       { id: 'f1', question: 'Apa itu Food AI Rescue?', answer: 'Platform penyelamatan surplus pangan berbasis AI yang menghubungkan bisnis makanan dengan komunitas yang membutuhkan untuk mengurangi pemborosan makanan.', category: 'Umum' },
@@ -92,11 +90,16 @@ const App: React.FC = () => {
 
   const toggleTheme = () => setIsDarkMode(prev => !prev);
 
-  const fetchData = useCallback(async (forceRefresh: boolean = false) => {
+    const fetchData = useCallback(async (forceRefresh: boolean = false) => {
         if (!role || !currentUser) return; 
         
         const cacheKey = `far_global_data_${currentUser.id}_${role}`;
         
+        // --- REAL-TIME NOTIFICATIONS (NO CACHE) ---
+        db.getNotifications(currentUser.id, role).then(notifData => {
+            if (notifData) setUserNotifications(notifData);
+        }).catch(err => console.error("Real-time Notification Fetch Error:", err));
+
         // 1. Check Global Cache
         if (!forceRefresh) {
             const cachedContent = localStorage.getItem(cacheKey);
@@ -139,18 +142,16 @@ const App: React.FC = () => {
 
             console.log("Fetching Data with Filters:", { providerIdFilter, claimsFilters });
 
-            const [inventoryData, claimsData, settingsData, faqData, broadcastsData] = await Promise.all([
+            const [inventoryData, claimsData, settingsData, faqData] = await Promise.all([
                 db.getInventory(providerIdFilter),
                 db.getClaims(claimsFilters),
                 db.getSettings(),
-                db.getFAQs(),
-                db.getBroadcasts()
+                db.getFAQs()
             ]);
 
             if (settingsData) setAppSettings(settingsData);
             if (inventoryData) setFoodItems(inventoryData);
             if (faqData) setGlobalFAQs(faqData);
-            if (broadcastsData) setBroadcastMessages(broadcastsData);
             
             let finalClaims = claimsData || [];
             if (role === 'receiver' && claimsData) {
@@ -527,11 +528,10 @@ const App: React.FC = () => {
         <NotificationsPage 
           role={role} 
           onBack={() => setCurrentView('dashboard')} 
-          claimHistory={claimHistory} 
-          inventory={foodItems} 
           userName={currentUser?.name}
-          broadcastMessages={broadcastMessages}
+          notifications={userNotifications}
           currentUserId={currentUser?.id} 
+          onRefresh={() => fetchData(true)}
         />
       );
       
@@ -624,7 +624,9 @@ const App: React.FC = () => {
                 foodItems={foodItems}
                 claimHistory={claimHistory}
                 currentUser={currentUser}
-                onCompleteOnboarding={handleCompleteTour} // PASS FUNCTION
+                onCompleteOnboarding={handleCompleteTour} 
+                notifications={userNotifications}
+                onRefresh={() => fetchData(true)}
             />
           );
       }
@@ -654,6 +656,7 @@ const App: React.FC = () => {
                 currentUser={currentUser} 
                 isLoading={isGlobalLoading} 
                 onRefresh={() => fetchData(true)} 
+                notifications={userNotifications}
             />
           );
       }
@@ -671,6 +674,7 @@ const App: React.FC = () => {
                 onRefresh={() => fetchData(true)} 
                 globalUsers={globalUsers}
                 inventory={foodItems}
+                notifications={userNotifications}
             />
           );
       }
@@ -687,8 +691,8 @@ const App: React.FC = () => {
                 globalClaims={claimHistory}
                 globalFAQs={globalFAQs} 
                 setGlobalFAQs={setGlobalFAQs} 
-                broadcastMessages={broadcastMessages}
-                setBroadcastMessages={setBroadcastMessages}
+                broadcastMessages={userNotifications.filter(n => n.id.includes('broadcast'))}
+                setBroadcastMessages={setUserNotifications as any}
                 allAddresses={allAddresses}
                 appSettings={appSettings}
                 setAppSettings={setAppSettings}

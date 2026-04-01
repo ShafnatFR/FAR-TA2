@@ -52,7 +52,12 @@ app.post('/api', async (req, res) => {
             case 'UPDATE_REPORT_STATUS': result = await updateReportStatus(data.id, data.status); break;
 
             case 'GET_FAQS': result = await getAllData('faqs'); break;
-            case 'GET_BROADCASTS': result = await getBroadcasts(); break;
+            case 'GET_NOTIFICATIONS': 
+                result = await getUserNotifications(data.userId, data.role); 
+                break;
+            case 'MARK_NOTIF_READ':
+                result = await markNotificationRead(data.userId, data.notifId);
+                break;
             case 'SEND_BROADCAST': 
                 result = await sendBroadcast(data.message || data, data.actor); 
                 break;
@@ -72,7 +77,11 @@ app.post('/api', async (req, res) => {
             case 'DELETE_FOOD_REQUEST': result = await deleteData('food_requests', data.id); break;
 
             case 'GET_POINT_HISTORY': result = await getPointHistory(data.userId); break;
-            case 'GET_BADGES': result = await getAllData('badges'); break;
+            case 'GET_BADGES': result = await getBadges(data.role); break;
+            case 'UPDATE_SELECTED_BADGE': 
+                await db.query('UPDATE users SET selected_badge_id = ? WHERE id = ?', [data.badgeId, data.userId]);
+                result = { success: true, badgeId: data.badgeId };
+                break;
 
             case 'GET_ADMIN_DASHBOARD': result = await getAdminDashboard(); break;
             case 'GET_ADMIN_IMPACT': result = await getAdminImpact(data.period); break;
@@ -553,8 +562,31 @@ async function processClaim(payload) {
             [foodId, claimData.receiverId, addressId, quantityToReduce, claimData.deliveryMethod.toUpperCase(), 'PENDING', claimData.uniqueCode]
         );
 
+        const claimId = claimResult.insertId;
+
+        // NOTIFIKASI: Beritahu Provider
+        const [foodItem] = await connection.query('SELECT provider_id, name FROM food_items WHERE id = ?', [foodId]);
+        if (foodItem.length > 0) {
+            await createNotification(
+                foodItem[0].provider_id, 
+                'warning', 
+                'Pesanan Masuk!', 
+                `Seseorang baru saja mengklaim menu "${foodItem[0].name}". Mohon segera siapkan.`,
+                claimId
+            );
+        }
+
+        // NOTIFIKASI: Beritahu Penerima (Konfirmasi)
+        await createNotification(
+            claimData.receiverId,
+            'success',
+            'Klaim Berhasil',
+            `Klaim untuk "${foodItem[0]?.name || 'makanan'}" sedang diproses. Simpan kode Anda: ${claimData.uniqueCode}`,
+            claimId
+        );
+
         await connection.commit();
-        return { success: true, newStock, claimId: claimResult.insertId };
+        return { success: true, newStock, claimId };
     } catch (error) {
         await connection.rollback();
         throw error;
@@ -600,7 +632,28 @@ async function updateClaimStatus(id, status, additionalData) {
     params.push(id);
 
     await db.query(query, params);
-    return { id, status: dbStatus };
+
+    // --- TRIGGER NOTIFIKASI BERDASARKAN UPDATE ---
+    const [c] = await db.query('SELECT c.*, f.name as foodName FROM claims c JOIN food_items f ON c.food_id = f.id WHERE c.id = ?', [id]);
+    if (c.length > 0) {
+        const claim = c[0];
+        
+        // A. Jika Status Berubah ke COMPLETED
+        if (dbStatus === 'COMPLETED') {
+            await createNotification(claim.receiver_id, 'success', 'Donasi Selesai!', `Donasi "${claim.foodName}" telah sukses diterima. Terima kasih telah membantu mengurangi food waste!`, id);
+            await createNotification(claim.provider_id, 'success', 'Donasi Terkirim!', `Menu "${claim.foodName}" telah selesai diterima oleh penerima.`, id);
+            if (claim.volunteer_id) {
+                await createNotification(claim.volunteer_id, 'success', 'Misi Sukses!', `Bagus! Pengantaran "${claim.foodName}" telah diverifikasi oleh penerima.`, id);
+            }
+        }
+        
+        // B. Jika Kurir/Relawan Sedang Menjemput (Picking Up)
+        if (additionalData?.courierStatus === 'picking_up') {
+            await createNotification(claim.receiver_id, 'info', 'Kurir Sedang Menuju Lokasi', `Relawan sedang menjemput donasi "${claim.foodName}" untuk diantar ke Anda.`, id);
+        }
+    }
+
+    return { id, status: dbStatus, ...additionalData };
 }
 
 async function verifyOrderQR(data) {
@@ -668,7 +721,7 @@ async function sendBroadcast(data) {
     }
 }
 
-async function getSocialImpact(userId) {
+async function getBaseSocialImpact(userId) {
     // 1. Get Total Points from Point History (Total Nilai Kebaikan)
     const [pointRows] = await db.query(
         'SELECT SUM(amount) as total FROM point_histories WHERE user_id = ?',
@@ -1192,6 +1245,19 @@ async function assignVolunteer(claimId, volunteerId, volunteerName) {
          WHERE id = ?`,
         [volunteerId, volunteerName, claimId]
     );
+
+    // NOTIFIKASI: Beritahu Relawan
+    const [cData] = await db.query('SELECT f.name as foodName FROM claims c JOIN food_items f ON c.food_id = f.id WHERE c.id = ?', [claimId]);
+    const foodName = cData.length > 0 ? cData[0].foodName : 'makanan';
+    
+    await createNotification(volunteerId, 'info', 'Tugas Baru Diterima', `Anda telah ditugaskan untuk mengantar "${foodName}". Cek menu Misi Aktif!`, claimId);
+    
+    // NOTIFIKASI: Beritahu Penerima
+    const [receiverData] = await db.query('SELECT receiver_id FROM claims WHERE id = ?', [claimId]);
+    if (receiverData.length > 0) {
+        await createNotification(receiverData[0].receiver_id, 'info', 'Relawan Ditemukan', `Relawan ${volunteerName} akan mengantar pesanan "${foodName}" Anda.`, claimId);
+    }
+
     return { claimId, volunteerId, volunteerName, status: 'IN_PROGRESS' };
 }
 
@@ -1266,7 +1332,149 @@ async function sendBroadcast(msgData, actor) {
     
     await logAction(actor?.id, actor?.name, 'Send Broadcast', `Kirim pengumuman: ${title} (Target: ${target})`);
     
+    // Broadcast notification to active users is handled in the Hybrid Query (GET_NOTIFICATIONS)
+    // because it's a "Read-on-Request" system.
+    
     return { ...msgData, id: result.insertId, status: 'sent', sentAt: 'Baru saja', readCount: 0 };
+}
+
+// --- HYBRID NOTIFICATION HELPERS ---
+
+async function createNotification(userId, type, title, message, linkedId = null) {
+    if (!userId) return null;
+    const [result] = await db.query(
+        'INSERT INTO notifications (user_id, type, title, message, linked_id) VALUES (?, ?, ?, ?, ?)',
+        [userId, type, title, message, linkedId]
+    );
+    return { id: result.insertId, userId, type, title, message, linkedId, isRead: false, date: new Date().toISOString() };
+}
+
+async function getUserNotifications(userId, role) {
+    if (!userId) return [];
+
+    console.log(`[NOTIF-ENGINE] Fetching for UserID: ${userId}, Role: ${role}`);
+
+    // Normalize role for broadcast target matching
+    // Front-end might send 'provider', 'volunteer', 'receiver', 'admin_manager', 'super_admin'
+    // Back-end targets in DB: 'all', 'provider', 'volunteer', 'receiver', 'admin'
+    let broadcastTarget = String(role || '').toLowerCase().trim();
+    if (broadcastTarget === 'admin_manager' || broadcastTarget === 'super_admin' || broadcastTarget === 'admin' || broadcastTarget === 'super_admin') {
+        broadcastTarget = 'admin';
+    } else if (broadcastTarget === 'donatur') {
+        broadcastTarget = 'provider';
+    } else if (broadcastTarget === 'relawan') {
+        broadcastTarget = 'volunteer';
+    } else if (broadcastTarget === 'penerima') {
+        broadcastTarget = 'receiver';
+    }
+
+    console.log(`[NOTIF-ENGINE] Mapped Target: ${broadcastTarget}`);
+
+    // Unified Query: Personal + Global Broadcasts
+    const query = `
+        (SELECT 
+            id, type, title, message, created_at, is_read, 'personal' as origin
+         FROM notifications 
+         WHERE user_id = ?)
+        UNION ALL
+        (SELECT 
+            b.id, b.type, b.title, b.content as message, b.created_at, 
+            IF(br.user_id IS NOT NULL, 1, 0) as is_read, 'broadcast' as origin
+         FROM broadcasts b
+         LEFT JOIN broadcast_reads br ON b.id = br.broadcast_id AND br.user_id = ?
+         WHERE b.target = 'all' OR b.target = ?)
+        ORDER BY created_at DESC
+        LIMIT 50
+    `;
+    
+    const [rows] = await db.query(query, [userId, userId, broadcastTarget]);
+    return rows.map(r => ({
+        id: r.origin === 'broadcast' ? `broadcast-${r.id}` : r.id,
+        type: r.type,
+        title: r.origin === 'broadcast' ? `[PENTING] ${r.title}` : r.title,
+        message: r.message,
+        date: r.created_at,
+        isRead: !!r.is_read,
+        priority: r.origin === 'broadcast' ? 'high' : 'medium'
+    }));
+}
+
+async function markNotificationRead(userId, notifId) {
+    if (!userId || !notifId) return { success: false };
+
+    if (String(notifId).startsWith('broadcast-')) {
+        const bId = notifId.replace('broadcast-', '');
+        await db.query(
+            'INSERT IGNORE INTO broadcast_reads (user_id, broadcast_id) VALUES (?, ?)',
+            [userId, bId]
+        );
+    } else {
+        await db.query(
+            'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?',
+            [notifId, userId]
+        );
+    }
+    return { success: true, notifId };
+}
+
+// --- BADGE & ACHIEVEMENT HELPERS ---
+
+async function getBadges(role) {
+    const mappedRole = role ? mapRole(role) : null;
+    let query = 'SELECT * FROM badges';
+    const params = [];
+    
+    if (mappedRole) {
+        query += ' WHERE role = ? OR role IS NULL';
+        params.push(mappedRole);
+    }
+    
+    const [rows] = await db.query(query, params);
+    return rows;
+}
+
+async function checkAchievements(userId, points) {
+    if (!userId) return;
+    
+    // 1. Get all potential badges the user COULD earn
+    const [user] = await db.query('SELECT role FROM users WHERE id = ?', [userId]);
+    if (user.length === 0) return;
+    
+    const role = user[0].role;
+    const [potentialBadges] = await db.query(
+        'SELECT * FROM badges WHERE (role = ? OR role IS NULL) AND min_points <= ?',
+        [role, points]
+    );
+    
+    // 2. Get badges the user ALREADY has
+    const [existingBadges] = await db.query('SELECT badge_id FROM user_badges WHERE user_id = ?', [userId]);
+    const existingIds = existingBadges.map(b => b.badge_id);
+    
+    // 3. Find new badges to award
+    const newBadges = potentialBadges.filter(b => !existingIds.includes(b.id));
+    
+    for (const badge of newBadges) {
+        await db.query('INSERT INTO user_badges (user_id, badge_id) VALUES (?, ?)', [userId, badge.id]);
+        
+        // NOTIFIKASI: Pencapaian Baru
+        await createNotification(
+            userId, 
+            'success', 
+            'Pencapaian Baru!', 
+            `Selamat! Anda baru saja membuka lencana "${badge.name}". Cek profil Anda!`,
+            badge.id
+        );
+    }
+}
+
+// Wrap getSocialImpact to trigger achievement check
+const originalGetSocialImpact = getBaseSocialImpact;
+async function getSocialImpact(userId) {
+    const impact = await originalGetSocialImpact(userId);
+    if (impact && impact.totalPoints) {
+        await checkAchievements(userId, impact.totalPoints);
+    }
+    return impact;
 }
 
 app.listen(port, () => {

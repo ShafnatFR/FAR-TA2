@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Store, Truck, User, Edit, Mail, Phone, Package, Star, Zap, CheckCircle, Clock, Award, Image, X, ChevronRight, Lock, Heart } from 'lucide-react';
 import { UserRole, UserData } from '../../../types';
-import { ACHIEVEMENT_BADGES, SOCIAL_SYSTEM } from '../../../constants';
+import { SOCIAL_SYSTEM } from '../../../constants';
 
 interface ProfileHeaderProps {
     userData: UserData;
@@ -27,6 +27,20 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, ba
     // UI States
     const [showEditMenu, setShowEditMenu] = useState(false);
     const [showBadgeSelector, setShowBadgeSelector] = useState(false);
+    const [availableBadges, setAvailableBadges] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchBadges = async () => {
+            try {
+                const { db } = await import('../../../services/db');
+                const data = await db.getBadges(role);
+                setAvailableBadges(data);
+            } catch (error) {
+                console.error("Failed to fetch available badges:", error);
+            }
+        };
+        fetchBadges();
+    }, [role]);
 
     // Gunakan stats dari props atau fallback ke 0
     const currentStats = stats || {
@@ -38,9 +52,8 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, ba
     // Determine current user points based on role for badge locking logic
     const currentUserPoints = typeof currentStats.value3 === 'number' ? currentStats.value3 : 0;
 
-    // Get Badges (Achievements) distinct from Rank
-    const availableBadges = ACHIEVEMENT_BADGES.filter(b => b.role === 'all' || b.role === role);
-    const activeBadge = availableBadges.find(b => b.id === selectedBadgeId);
+    // Active Badge from DB data
+    const activeBadge = availableBadges.find(b => String(b.id) === String(selectedBadgeId));
 
     // --- LOGIC BADGE LEVEL ICON ---
     // Mengambil ikon rank berdasarkan poin user dari SOCIAL_SYSTEM
@@ -60,22 +73,21 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, ba
     };
 
     const applyBadgeCover = async (badgeId: string) => {
-        setSelectedBadgeId(badgeId);
+        setSelectedBadgeId(String(badgeId));
         setCoverMode('badge');
         setShowBadgeSelector(false);
         
         // Persist to DB
-        if (onUpdateUser) {
-            const updatedUser = { ...userData, selected_badge_id: badgeId };
-            try {
-                // We use db.upsertUser directly or via onUpdateUser
-                // onUpdateUser in ProfileIndex updates local state, we should also call db
-                const { db } = await import('../../../services/db');
-                await db.upsertUser(updatedUser);
+        try {
+            const { db } = await import('../../../services/db');
+            await db.updateSelectedBadge(userData.id, String(badgeId));
+            
+            if (onUpdateUser) {
+                const updatedUser = { ...userData, selected_badge_id: Number(badgeId) };
                 onUpdateUser(updatedUser);
-            } catch (error) {
-                console.error("Failed to save badge", error);
             }
+        } catch (error) {
+            console.error("Failed to save badge", error);
         }
     };
 
@@ -209,25 +221,25 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, ba
                         <div className="p-4 overflow-y-auto space-y-3 bg-stone-50 dark:bg-stone-950/50">
                             {availableBadges.length > 0 ? (
                                 availableBadges.map(badge => {
-                                    const isLocked = currentUserPoints < badge.minPoints;
-                                    return (
-                                        <button 
-                                            key={badge.id}
-                                            onClick={() => !isLocked && applyBadgeCover(badge.id)}
-                                            disabled={isLocked}
-                                            className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all group text-left relative overflow-hidden ${
-                                                isLocked 
-                                                ? 'bg-stone-100 dark:bg-stone-800 border-stone-200 dark:border-stone-700 opacity-70 cursor-not-allowed' 
-                                                : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 hover:border-orange-500 dark:hover:border-orange-500 cursor-pointer'
-                                            }`}
-                                        >
-                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-sm z-10 ${badge.id === selectedBadgeId ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-stone-100 dark:bg-stone-800'}`}>
-                                                {isLocked ? <Lock className="w-5 h-5 text-stone-400" /> : badge.icon}
-                                            </div>
-                                            <div className="flex-1 z-10">
-                                                <h4 className={`font-bold transition-colors ${isLocked ? 'text-stone-500' : 'text-stone-900 dark:text-white group-hover:text-orange-500'}`}>{badge.name}</h4>
-                                                <p className="text-xs text-stone-500">{isLocked ? `Butuh ${badge.minPoints} Poin` : badge.description}</p>
-                                            </div>
+                                            const isLocked = currentUserPoints < (badge.min_points || 0);
+                                            return (
+                                                <button 
+                                                    key={badge.id}
+                                                    onClick={() => !isLocked && applyBadgeCover(badge.id)}
+                                                    disabled={isLocked}
+                                                    className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all group text-left relative overflow-hidden ${
+                                                        isLocked 
+                                                        ? 'bg-stone-100 dark:bg-stone-800 border-stone-200 dark:border-stone-700 opacity-70 cursor-not-allowed' 
+                                                        : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 hover:border-orange-500 dark:hover:border-orange-500 cursor-pointer'
+                                                    }`}
+                                                >
+                                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-sm z-10 ${String(badge.id) === String(selectedBadgeId) ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-stone-100 dark:bg-stone-800'}`}>
+                                                        {isLocked ? <Lock className="w-5 h-5 text-stone-400" /> : badge.icon}
+                                                    </div>
+                                                    <div className="flex-1 z-10">
+                                                        <h4 className={`font-bold transition-colors ${isLocked ? 'text-stone-500' : 'text-stone-900 dark:text-white group-hover:text-orange-500'}`}>{badge.name}</h4>
+                                                        <p className="text-xs text-stone-500">{isLocked ? `Butuh ${badge.min_points} Poin` : badge.description}</p>
+                                                    </div>
                                             {!isLocked && <ChevronRight className="w-5 h-5 text-stone-300 group-hover:text-orange-500 z-10" />}
                                             
                                             {/* Hover Gradient Effect */}

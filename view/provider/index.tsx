@@ -17,17 +17,21 @@ interface ProviderIndexProps {
   foodItems?: FoodItem[];
   claimHistory?: ClaimHistoryItem[];
   currentUser?: UserData | null;
-  onCompleteOnboarding?: () => void; // New Prop
+  onCompleteOnboarding?: () => void; 
+  notifications?: any[]; // New Prop
+  onRefresh?: () => void; // New Prop
 }
 
 export const ProviderIndex: React.FC<ProviderIndexProps> = ({ 
+    onOpenNotifications,
     onNavigate, 
     foodItems = [], 
     claimHistory = [], 
     currentUser,
-    onCompleteOnboarding 
+    onCompleteOnboarding,
+    notifications = [],
+    onRefresh
 }) => {
-  const [viewMode, setViewMode] = useState<'main' | 'notifications'>('main');
   const [socialImpact, setSocialImpact] = useState<any>(null);
   const [isLoadingImpact, setIsLoadingImpact] = useState(true);
   
@@ -78,18 +82,6 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
       };
   }, [foodItems, claimHistory, userName, socialImpact]);
 
-  if (viewMode === 'notifications') {
-      return (
-        <NotificationsPage 
-            role="provider" 
-            onBack={() => setViewMode('main')} 
-            claimHistory={claimHistory} 
-            inventory={foodItems}
-            userName={userName} 
-        />
-      );
-  }
-
   return (
     <>
         {currentUser?.isNewUser && (
@@ -104,7 +96,7 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
                 </div>
                 
                 <button 
-                    onClick={() => setViewMode('notifications')} 
+                    onClick={onOpenNotifications} 
                     className="relative p-3 bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 text-stone-500 hover:text-orange-600 transition-all shadow-sm group active:scale-95"
                 >
                     <Bell className="w-6 h-6" />

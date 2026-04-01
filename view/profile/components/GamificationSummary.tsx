@@ -26,8 +26,10 @@ export const GamificationSummary: React.FC<GamificationSummaryProps> = ({ curren
     useEffect(() => {
         const fetchBadges = async () => {
             try {
-                const data = await db.getBadges();
-                setAllBadges(data);
+                if (currentUser?.role) {
+                    const data = await db.getBadges(currentUser.role);
+                    setAllBadges(data);
+                }
             } catch (e) {
                 console.error("Failed to fetch badges:", e);
             } finally {
@@ -35,7 +37,7 @@ export const GamificationSummary: React.FC<GamificationSummaryProps> = ({ curren
             }
         };
         fetchBadges();
-    }, []);
+    }, [currentUser?.role]);
 
     if (isLoading) {
         return (

@@ -97,6 +97,8 @@ export const db = {
 
   // --- UTILS ---
   getFAQs: () => sendRequest<FAQItem[]>('GET_FAQS'),
+  getNotifications: (userId: string, role: string) => sendRequest<Notification[]>('GET_NOTIFICATIONS', { userId, role }),
+  markNotificationRead: (userId: string, notifId: string) => sendRequest<any>('MARK_NOTIF_READ', { userId, notifId }),
   getBroadcasts: () => sendRequest<BroadcastMessage[]>('GET_BROADCASTS'),
   sendBroadcast: (message: BroadcastMessage, actor: any) => sendRequest<BroadcastMessage>('SEND_BROADCAST', { message, actor }),
   initDB: () => sendRequest<string>('INIT_DB'),
@@ -108,7 +110,8 @@ export const db = {
   addFoodRequest: (data: any) => sendRequest<any>('ADD_FOOD_REQUEST', data),
   deleteFoodRequest: (id: string) => sendRequest<any>('DELETE_FOOD_REQUEST', { id }),
   getPointHistory: (userId: string) => sendRequest<any[]>('GET_POINT_HISTORY', { userId }),
-  getBadges: () => sendRequest<any[]>('GET_BADGES'),
+  getBadges: (role?: string) => sendRequest<any[]>('GET_BADGES', { role }),
+  updateSelectedBadge: (userId: string, badgeId: string) => sendRequest<any>('UPDATE_SELECTED_BADGE', { userId, badgeId }),
   getAdminDashboard: () => sendRequest<any>('GET_ADMIN_DASHBOARD'),
   getAdminImpact: (period: string) => sendRequest<any>('GET_ADMIN_IMPACT', { period }),
   getAdminTargets: () => sendRequest<any[]>('GET_ADMIN_TARGETS'),
