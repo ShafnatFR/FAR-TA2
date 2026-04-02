@@ -19,21 +19,24 @@ const sendRequest = async <T>(action: string, data: any = {}): Promise<T> => {
       },
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
     const text = await response.text();
     let json;
     
     try {
         json = JSON.parse(text);
     } catch (e) {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         console.error(`%c[API PARSE ERROR] ${action}`, 'color: red; font-weight: bold;', "Raw text:", text);
         if (text.trim().startsWith('<')) {
              throw new Error("Server Error: Check Deployment URL. Make sure it ends in /exec and permissions are set to 'Anyone'.");
         }
         throw new Error("Server Error: Received invalid response from backend.");
+    }
+
+    if (!response.ok) {
+        throw new Error(json.message ? json.message : `HTTP error! status: ${response.status}`);
     }
 
     if (json.status === 'error') {

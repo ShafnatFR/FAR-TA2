@@ -13,6 +13,9 @@ TRUNCATE TABLE `claims`;
 TRUNCATE TABLE `reviews`;
 TRUNCATE TABLE `reports`;
 TRUNCATE TABLE `point_histories`;
+TRUNCATE TABLE `broadcast_reads`;
+TRUNCATE TABLE `broadcasts`;
+TRUNCATE TABLE `notifications`;
 
 -- 1. BADGES (20 Baris)
 INSERT INTO `badges` (`id`, `name`, `role`, `min_points`, `description`) VALUES
@@ -289,5 +292,20 @@ INSERT INTO `faqs` (`id`, `category`, `question`, `answer`) VALUES
 (18, 'Sistem', 'Dampak sosial dihitung dari mana?', 'Dari jenis makanan dan berat porsi yang berhasil diselamatkan.'),
 (19, 'Akun', 'Cara ganti password?', 'Masuk ke profil > Pengaturan > Ganti Password.'),
 (20, 'Akun', 'Bisa punya 2 role sekaligus?', 'Saat ini 1 email 1 role. Silakan daftar dengan email berbeda jika ingin role lain.');
+
+-- 13. BROADCASTS (2 Baris)
+INSERT INTO `broadcasts` (`id`, `title`, `content`, `target`, `type`, `author_id`) VALUES
+(1, 'Selamat Datang di FoodAI Rescue', 'Terima kasih telah bergabung dengan kami untuk mengurangi food waste.', 'all', 'info', 20),
+(2, 'Update Sistem Terbaru', 'Ada fitur baru di halaman profil, silakan cek.', 'all', 'info', 20);
+
+-- 14. NOTIFICATIONS (2 Baris)
+INSERT INTO `notifications` (`id`, `user_id`, `type`, `title`, `message`, `is_read`) VALUES
+(1, 1, 'info', 'Profil Berhasil Diperbarui', 'Data profil Anda sudah tersimpan.', 0),
+(2, 6, 'success', 'Klaim Berhasil', 'Silakan tunggu relawan mengantar pesanan Anda.', 0);
+
+-- 15. BROADCAST_READS (2 Baris)
+INSERT INTO `broadcast_reads` (`user_id`, `broadcast_id`) VALUES
+(1, 1),
+(6, 1);
 
 SET FOREIGN_KEY_CHECKS = 1;

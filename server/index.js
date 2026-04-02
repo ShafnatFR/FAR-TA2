@@ -123,7 +123,24 @@ app.post('/api', async (req, res) => {
         res.json({ status: 'success', data: result });
     } catch (error) {
         console.error(`[ERROR] ${action}:`, error);
-        res.status(500).json({ status: 'error', message: error.message });
+        
+        let statusCode = error.statusCode || 500;
+        
+        // Fallback mapping for generic errors that don't have a status code set
+        if (!error.statusCode) {
+            const msg = error.message.toLowerCase();
+            if (msg.includes('email atau password salah') || msg.includes('tidak valid')) {
+                statusCode = 401;
+            } else if (msg.includes('sudah terdaftar')) {
+                statusCode = 409;
+            } else if (msg.includes('not found') || msg.includes('tidak ditemukan')) {
+                statusCode = 404;
+            } else if (msg.includes('stock not enough') || msg.includes('must have')) {
+                statusCode = 400;
+            }
+        }
+        
+        res.status(statusCode).json({ status: 'error', message: error.message });
     }
 });
 
@@ -156,7 +173,11 @@ async function registerUser(data) {
     const { name, email, password, role, phone, avatar } = data;
     // Check if email exists
     const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
-    if (existing.length > 0) throw new Error('Email ini sudah terdaftar.');
+    if (existing.length > 0) {
+        const err = new Error('Email ini sudah terdaftar.');
+        err.statusCode = 409;
+        throw err;
+    }
 
     const [result] = await db.query(
         'INSERT INTO users (name, email, password, role, phone, avatar, points, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -168,7 +189,11 @@ async function registerUser(data) {
 async function loginUser(data) {
     const { email, password } = data;
     const [rows] = await db.query('SELECT * FROM users WHERE email = ? AND password = ?', [email, password]);
-    if (rows.length === 0) throw new Error('Email atau Password salah.');
+    if (rows.length === 0) {
+        const err = new Error('Email atau Password salah.');
+        err.statusCode = 401;
+        throw err;
+    }
     const user = rows[0];
     delete user.password;
     // Reverse map role if needed for frontend
