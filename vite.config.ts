@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        allowedHosts: true, // Setting this to true allows all hosts (fixes ngrok issues)
+        proxy: {
+          '/api': {
+            target: 'http://localhost:5000',
+            changeOrigin: true,
+          }
+        }
       },
       plugins: [react()],
       define: {

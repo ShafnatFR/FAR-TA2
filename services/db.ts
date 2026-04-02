@@ -5,7 +5,7 @@ import { FoodItem, UserData, ClaimHistoryItem, FAQItem, BroadcastMessage, Addres
  * URL Google Apps Script Web App.
  * PENTING: Ganti string ini dengan URL Web App Anda sendiri yang BARU setelah melakukan Deploy!
  */
-const API_URL = "http://localhost:5000/api";
+const API_URL = "/api"; // Meneruskan request ke backend melalui Vite proxy
 
 const sendRequest = async <T>(action: string, data: any = {}): Promise<T> => {
   console.log(`%c[API REQUEST] ${action}`, 'color: blue; font-weight: bold;', data);
@@ -16,6 +16,7 @@ const sendRequest = async <T>(action: string, data: any = {}): Promise<T> => {
       body: JSON.stringify({ action, data }),
       headers: {
         'Content-Type': 'application/json', 
+        'ngrok-skip-browser-warning': 'true' // Bypasses ngrok's "Visit Site" warning screen
       },
     });
 
