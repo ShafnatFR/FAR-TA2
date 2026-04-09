@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Trophy, TrendingUp, Flame, Gift, CheckCircle, Award, MapPin, Clock, Info, X, Target, Zap, BarChart3, ChevronDown, ChevronUp, Medal } from 'lucide-react';
 import { RankLevel, DailyQuest } from '../../../types';
 import { SOCIAL_SYSTEM, ACHIEVEMENT_BADGES } from '../../../constants';
+import { CounterUp } from '../../components/CounterUp';
 
 interface StatsDashboardProps {
     stats: {
@@ -139,7 +140,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({ stats, quests, i
                           <h3 className="font-black text-stone-800 text-sm uppercase tracking-widest">Koleksi Badge</h3>
                       </div>
                       <div className="flex items-baseline gap-2 mt-2">
-                          <span className="text-4xl font-black text-stone-900">{unlockedBadgesCount}</span>
+                          <span className="text-4xl font-black text-stone-900"><CounterUp end={unlockedBadgesCount} /></span>
                           <span className="text-sm font-bold text-stone-400">/ {totalBadges} Terbuka</span>
                       </div>
                       <p className="text-[10px] text-stone-500 mt-2 font-medium">Terus selesaikan misi untuk membuka lebih banyak pencapaian!</p>
@@ -190,7 +191,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({ stats, quests, i
                        </h3>
                     </div>
                     <div className="text-right">
-                        <span className="text-2xl font-black text-stone-900">{stats.weeklyActivity.reduce((a, b) => a + b, 0)}</span>
+                        <span className="text-2xl font-black text-stone-900"><CounterUp end={stats.weeklyActivity.reduce((a, b) => a + b, 0)} /></span>
                         <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Misi Selesai</p>
                     </div>
                  </div>
@@ -209,7 +210,9 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({ stats, quests, i
                        <div className={`w-10 h-10 rounded-2xl ${item.bg} flex items-center justify-center ${item.color} mb-3 group-hover:scale-110 transition-transform`}>
                           <item.icon className="w-5 h-5" />
                        </div>
-                       <span className="text-xl font-black text-stone-900 mb-1 leading-none">{item.value}</span>
+                       <span className="text-xl font-black text-stone-900 mb-1 leading-none">
+                         <CounterUp end={item.value} decimals={idx === 2 ? 1 : 0} />
+                       </span>
                        <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">{item.label}</span>
                     </div>
                   ))}

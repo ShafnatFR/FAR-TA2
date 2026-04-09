@@ -1,9 +1,12 @@
 
 import React, { useState } from 'react';
 import { Sparkles, Utensils, Package, Share2, Loader2, Copy, Check } from 'lucide-react';
-import { Button } from '../../../../components/Button';
-import { aiCorporate } from '../../../../services/aiCorporate';
-import { UserData } from '../../../../types';
+import { Button } from '../../components/Button';
+import { db } from '../../../services/db';
+import { kitchenScanner } from '../../../services/kitchenScanner';
+import { packagingDesign } from '../../../services/packagingDesign';
+import { contentWriter } from '../../../services/contentWriter';
+import { UserData } from '../../../types';
 
 interface CorporateAIWidgetsProps {
     currentUser: UserData | null;
@@ -27,16 +30,16 @@ export const CorporateAIWidgets: React.FC<CorporateAIWidgetsProps> = ({ currentU
 
             if (actionType === 'recipe') {
                 title = "Ide Resep Kreatif Zero-Waste";
-                content = await aiCorporate.generateRecipe(latestFood.name, latestFood.description || "", currentUser?.role || 'corporate_donor');
+                content = await kitchenScanner.generateRecipe(latestFood.name, latestFood.description || "", currentUser?.role || 'corporate_donor');
             } else if (actionType === 'packaging') {
                 title = "Rekomendasi Kemasan Berkelanjutan";
-                content = await aiCorporate.designPackaging(latestFood.name, currentUser?.role || 'corporate_donor');
+                content = await packagingDesign.generate(latestFood.name, currentUser?.role || 'corporate_donor');
             } else if (actionType === 'csr') {
                 title = "CSR Marketing Copy (LinkedIn/IG)";
-                content = await aiCorporate.writeCSRCopy({
+                content = await contentWriter.writeCSR({
                     foodName: latestFood.name,
                     donorName: currentUser?.name || "Perusahaan Kami",
-                    impactPoints: 250, // Mock impact atau hitung dari data asli
+                    impactPoints: 250, 
                     co2Saved: 12.5
                 }, currentUser?.role || 'corporate_donor');
             }
@@ -117,6 +120,31 @@ export const CorporateAIWidgets: React.FC<CorporateAIWidgetsProps> = ({ currentU
                             <p className="text-stone-300 leading-relaxed font-medium whitespace-pre-wrap">{result.content}</p>
                         </div>
                         <div className="mt-8 flex gap-3">
+                            <button 
+                                onClick={async () => {
+                                    if (!currentUser?.id || !latestFood?.id) return;
+                                    setLoadingAction('saving');
+                                    try {
+                                        await db.saveCorporateAIResult({
+                                            donorId: currentUser.id,
+                                            foodId: latestFood.id,
+                                            type: result.title.includes('Resep') ? 'RECIPE' : result.title.includes('Kemasan') ? 'PACKAGING' : 'CSR_COPY',
+                                            title: result.title,
+                                            content: result.content
+                                        });
+                                        alert("Berhasil disimpan ke riwayat!");
+                                    } catch (e: any) {
+                                        alert(e.message);
+                                    } finally {
+                                        setLoadingAction(null);
+                                    }
+                                }}
+                                disabled={loadingAction === 'saving'}
+                                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-white text-stone-900 hover:bg-stone-100 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                            >
+                                {loadingAction === 'saving' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-orange-500" />}
+                                Simpan ke Riwayat
+                            </button>
                             <button 
                                 onClick={copyToClipboard}
                                 className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all"

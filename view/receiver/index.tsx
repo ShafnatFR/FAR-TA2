@@ -5,6 +5,8 @@ import { FoodList } from './components/FoodList';
 import { FoodDetail } from './components/FoodDetail';
 import { SuccessClaimSplash } from '../common/SuccessClaimSplash';
 import { RequestManager } from './components/RequestManager';
+import { KitchenScanner } from '../common/KitchenScanner';
+import { Sparkles, Utensils } from 'lucide-react';
 
 interface ReceiverIndexProps {
   onOpenNotifications: () => void;
@@ -35,6 +37,7 @@ export const ReceiverIndex: React.FC<ReceiverIndexProps> = ({
 }) => {
   const [selectedItem, setSelectedItem] = useState<FoodItem | null>(null);
   const [showRequests, setShowRequests] = useState(false);
+  const [showKitchenScanner, setShowKitchenScanner] = useState(false);
   
   // Merge internal loading logic (from previous impl) with global loading
   const [isMounting, setIsMounting] = useState(true);
@@ -99,16 +102,49 @@ export const ReceiverIndex: React.FC<ReceiverIndexProps> = ({
                 currentUser={currentUser} 
             />
         ) : (
-            <FoodList 
-                onOpenNotifications={onOpenNotifications} 
-                onSelectItem={setSelectedItem} 
-                onOpenRequests={() => setShowRequests(true)}
-                foodItems={foodItems} 
-                savedIds={new Set(savedItems.map(s => s.id))}
-                onToggleSave={onToggleSave}
-                isLoading={isLoading}
-                onRefresh={onRefresh}
-                disableExpiryLogic={disableExpiryLogic}
+            <>
+                {/* Kitchen Scanner Promo Widget */}
+                <div className="px-6 pt-8 max-w-5xl mx-auto">
+                    <div className="bg-stone-900 rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-orange-600/20 rounded-full -mr-20 -mt-20 blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-600/40">
+                                        <Sparkles className="w-4 h-4" />
+                                    </div>
+                                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Kitchen AI</span>
+                                </div>
+                                <h3 className="text-lg font-black text-white leading-tight">Sulap Sisa Makanan <br/> Jadi Masakan Lezat</h3>
+                            </div>
+                            <button 
+                                onClick={() => setShowKitchenScanner(true)}
+                                className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-stone-900 shadow-xl active:scale-90 transition-all"
+                            >
+                                <Utensils className="w-6 h-6" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <FoodList 
+                    onOpenNotifications={onOpenNotifications} 
+                    onSelectItem={setSelectedItem} 
+                    onOpenRequests={() => setShowRequests(true)}
+                    foodItems={foodItems} 
+                    savedIds={new Set(savedItems.map(s => s.id))}
+                    onToggleSave={onToggleSave}
+                    isLoading={isLoading}
+                    onRefresh={onRefresh}
+                    disableExpiryLogic={disableExpiryLogic}
+                />
+            </>
+        )}
+
+        {showKitchenScanner && (
+            <KitchenScanner 
+                currentUser={currentUser} 
+                onBack={() => setShowKitchenScanner(false)} 
             />
         )}
 

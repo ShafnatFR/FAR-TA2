@@ -14,6 +14,7 @@ import { Communication } from './components/Communication';
 import { ContentCMS } from './components/ContentCMS';
 import { SystemConfig } from './components/SystemConfig';
 import { AdminList } from './components/AdminList';
+import { LogViewer } from './components/LogViewer';
 
 interface AdminIndexProps {
   role: UserRole;
@@ -63,6 +64,7 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
     { id: 'communication', label: 'Broadcast', icon: Megaphone },
     { id: 'content', label: 'Konten CMS', icon: FileText },
     { id: 'admins', label: 'Admin List', icon: UserCog },
+    { id: 'logs', label: 'Activity Logs', icon: Shield },
     { id: 'settings', label: 'Pengaturan', icon: Settings },
   ];
 
@@ -89,6 +91,8 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
         return <ContentCMS faqs={globalFAQs} setFaqs={setGlobalFAQs} onRefresh={() => onRefresh && onRefresh()} currentUser={currentUser} />;
       case 'admins':
         return <AdminList currentUser={currentUser} onMenuRefresh={() => onRefresh && onRefresh()} />;
+      case 'logs':
+        return <LogViewer />;
       case 'settings':
         return <SystemConfig appSettings={appSettings} setAppSettings={setAppSettings} currentUser={currentUser} />;
       default:

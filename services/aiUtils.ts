@@ -21,6 +21,11 @@ const getAllApiKeys = (): string[] => {
   return unique;
 };
 
+/** Key for Corporate Subscribers (Dedicated/Private) */
+export const getCorporateMasterKey = (): string | null => {
+    return import.meta.env.VITE_GEMINI_API_KEY_CORPORATE_MASTER || null;
+};
+
 const API_KEYS = getAllApiKeys();
 const failedKeys = new Set<string>(); // Blacklisted keys for this session
 let currentKeyIndex = 0;

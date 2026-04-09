@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Shield, HelpCircle, LogOut, Moon, Sun, Store, Heart, ChevronRight, ArrowLeft, RefreshCw, AlertTriangle } from 'lucide-react';
+import { User, MapPin, Shield, HelpCircle, LogOut, Moon, Sun, Store, Heart, ChevronRight, ArrowLeft, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
 import { Button } from '../components/Button';
 import { UserRole, UserData, SavedItem, ClaimHistoryItem, FoodItem, FAQItem, Address } from '../../types';
 import { ProfileHeader } from './components/ProfileHeader';
@@ -13,6 +13,7 @@ import { ClaimHistory, ReportModal, ReviewModal } from './components/ClaimHistor
 import { ClaimHistoryDetail } from './components/ClaimHistoryDetail'; 
 import { GamificationSummary } from './components/GamificationSummary';
 import { PointHistory } from './components/PointHistory';
+import { AIApiManagement } from './components/AIApiManagement';
 import { HistoryList } from '../volunteer/components/HistoryList';
 import { FoodDetail } from '../receiver/components/FoodDetail';
 import { db } from '../../services/db';
@@ -353,6 +354,20 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
         );
     }
 
+    if (currentView === 'ai_settings' && userData) {
+        return (
+            <div className="p-4 md:p-8 pb-32">
+                <div className="flex items-center gap-4 mb-6">
+                    <button onClick={() => setCurrentView('main')} className="p-2 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors">
+                        <ArrowLeft className="w-6 h-6 text-stone-900 dark:text-white" />
+                    </button>
+                    <h2 className="text-xl font-bold text-stone-900 dark:text-white">Pengaturan Utama AI</h2>
+                </div>
+                <AIApiManagement currentUser={userData} />
+            </div>
+        );
+    }
+
     if (currentView === 'saved') {
         if (selectedFoodItem) {
             return (
@@ -518,6 +533,9 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
                         <MenuButton icon={MapPin} label="Alamat Tersimpan" onClick={() => setCurrentView('address')} />
                     )}
                     <MenuButton icon={Shield} label="Keamanan & Privasi" onClick={() => setCurrentView('security')} />
+                    {role !== 'volunteer' && (
+                        <MenuButton icon={Sparkles} label="Pengaturan API AI" onClick={() => setCurrentView('ai_settings')} />
+                    )}
                     <button onClick={toggleTheme} className="w-full flex items-center justify-between p-4 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors border-b border-stone-100 dark:border-stone-800">
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-950 flex items-center justify-center text-stone-500 dark:text-stone-400">{isDarkMode ? <Moon className="w-4 h-4 text-orange-400" /> : <Sun className="w-4 h-4 text-orange-500" />}</div>

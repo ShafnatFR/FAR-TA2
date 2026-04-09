@@ -7,7 +7,7 @@ import { Button } from '../../components/Button';
 import { FoodItem, UserData, Address } from '../../../types';
 import { QualityCheckInventoryInput } from './QualityCheckInventoryInput';
 import { db } from '../../../services/db';
-import { ImpactBreakdownItem } from '../../../services/ai';
+import { ImpactBreakdownItem } from '../../../services/foodVerification';
 
 interface QualityCheckInventoryProps {
   onBack: () => void;

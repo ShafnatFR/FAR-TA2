@@ -8,7 +8,7 @@ export interface UserData {
   name: string;
   email: string;
   role: UserRole;
-  status: 'active' | 'pending' | 'suspended';
+  status: 'active' | 'pending' | 'suspended' | 'inactive';
   points: number;
   joinDate: string;
   phone?: string;
@@ -57,6 +57,7 @@ export interface FoodItem {
   maxQuantity?: number;
   quantityUnit?: string;
   weightPerUnit?: number;
+  category?: 'READY_TO_EAT' | 'GROCERIES' | 'BAKERY' | 'FROZEN_FOOD' | 'OTHER';
   expiryTime: string;
   createdAt: string;
   distributionStart?: string;
@@ -64,7 +65,7 @@ export interface FoodItem {
   imageUrl: string;
   providerName: string;
   location?: { lat: number; lng: number; address: string; addressId?: string };
-  status: 'available' | 'claimed' | 'completed' | 'expired';
+  status: 'available' | 'claimed' | 'completed' | 'expired' | 'reserved';
   deliveryMethod: 'pickup' | 'delivery' | 'both';
   aiVerification?: {
     isEdible: boolean;
@@ -252,7 +253,7 @@ export interface Report {
   title: string;
   description: string;
   date: string;
-  status: 'new' | 'investigating' | 'resolved' | 'dismissed';
+  status: 'new' | 'investigating' | 'resolved' | 'dismissed' | 'rejected' | 'in_progress';
   reporter: string;
   target?: string;
   isUrgent: boolean;
@@ -260,6 +261,7 @@ export interface Report {
   priority?: 'high' | 'medium';
   type?: string;
   evidenceUrl?: string;
+  title?: string;
 }
 
 export interface DistributionTask {

@@ -129,6 +129,28 @@ export const db = {
   deleteAdmin: (id: string, actor: any) => sendRequest<any>('DELETE_ADMIN', { id, actor }),
   
   // --- CORPORATE AI ---
-  callCorporateAI: (type: 'GENERATE_RECIPE' | 'DESIGN_PACKAGING' | 'WRITE_CSR_COPY', role: string, payload: any) => 
-    sendRequest<any>('CORPORATE_AI', { type, role, payload }),
+  callCorporateAI: (type: string, role: string, payload: any, actorId?: string) => 
+    sendRequest<any>('CORPORATE_AI', { type, role, payload, actorId }),
+  verifyFood: (payload: any, actorId: string) => 
+    sendRequest<any>('VERIFY_FOOD', { payload, actorId }),
+  saveCorporateAIResult: (data: { donorId: number, foodId: number, type: string, title: string, content: string }) =>
+    sendRequest<any>('SAVE_CORPORATE_AI_RESULT', data),
+  getCorporateAIHistory: (donorId: number) => sendRequest<any[]>('GET_CORPORATE_AI_HISTORY', { donorId }),
+
+  // --- GAMIFICATION & QUESTS ---
+  getQuests: (userId: number) => sendRequest<any[]>('GET_QUESTS', { userId }),
+  updateQuestProgress: (userId: number, questId: number, value: number) => 
+    sendRequest<any>('UPDATE_QUEST_PROGRESS', { userId, questId, value }),
+  getLeaderboard: () => sendRequest<any[]>('GET_LEADERBOARD'),
+  getLeaderboardHistory: (period: 'WEEKLY' | 'MONTHLY' = 'WEEKLY') => 
+    sendRequest<any[]>('GET_LEADERBOARD_HISTORY', { period }),
+
+  // --- PHASE 5: AI & MASTER ADMIN ---
+  getUserAIKeys: (userId: string) => sendRequest<any[]>('GET_USER_AI_KEYS', { userId }),
+  addUserAIKey: (userId: string, apiKey: string, label: string) => 
+    sendRequest<any>('ADD_USER_AI_KEY', { userId, apiKey, label }),
+  deleteUserAIKey: (userId: string, id: number) => 
+    sendRequest<any>('DELETE_USER_AI_KEY', { userId, id }),
+  generateSnapshot: (actor: { id: string, name: string }) => 
+    sendRequest<any>('GENERATE_SNAPSHOT', { actor }),
 };

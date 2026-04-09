@@ -53,7 +53,8 @@ CREATE TABLE `ai_verifications` (
   `halal_score` int(11) NOT NULL,
   `quality_score` int(11) DEFAULT NULL,
   `reason` text DEFAULT NULL,
-  `ingredients` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`ingredients`))
+  `ingredients` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`ingredients`)),
+  `allergens` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -65,7 +66,7 @@ CREATE TABLE `ai_verifications` (
 CREATE TABLE `badges` (
   `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
-  `role` enum('INDIVIDUAL_DONOR','CORPORATE_DONOR','RECEIVER','VOLUNTEER','ADMIN','SUPER_ADMIN') DEFAULT NULL,
+  `role` enum('INDIVIDUAL_DONOR','CORPORATE_DONOR','RECIPIENT','VOLUNTEER','ADMIN','SUPER_ADMIN') DEFAULT NULL,
   `min_points` int(11) DEFAULT 0,
   `icon` varchar(255) DEFAULT NULL,
   `description` text DEFAULT NULL,
@@ -89,6 +90,8 @@ CREATE TABLE `claims` (
   `status` enum('PENDING','IN_PROGRESS','COMPLETED','CANCELLED') DEFAULT 'PENDING',
   `unique_code` varchar(255) DEFAULT NULL,
   `is_scanned` tinyint(1) DEFAULT 0,
+  `scanned_at` timestamp NULL DEFAULT NULL,
+  `scanned_by_id` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `completed_at` timestamp NULL DEFAULT NULL,
   `courier_name` varchar(255) DEFAULT NULL,
@@ -127,7 +130,8 @@ CREATE TABLE `food_items` (
   `distribution_start_time` time NOT NULL,
   `distribution_end_time` time NOT NULL,
   `delivery_method` enum('PICKUP','DELIVERY','BOTH') NOT NULL,
-  `status` enum('AVAILABLE','RESERVED','CLAIMED','EXPIRED') DEFAULT 'AVAILABLE',
+  `category` enum('READY_TO_EAT','GROCERIES','BAKERY','FROZEN_FOOD','OTHER') DEFAULT 'OTHER',
+  `status` enum('AVAILABLE','RESERVED','CLAIMED','COMPLETED','EXPIRED') DEFAULT 'AVAILABLE',
   `image_url` varchar(255) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -178,6 +182,8 @@ CREATE TABLE `reports` (
   `description` text DEFAULT NULL,
   `evidence_photo` longtext DEFAULT NULL,
   `status` enum('NEW','IN_PROGRESS','RESOLVED','REJECTED') DEFAULT 'NEW',
+  `is_urgent` tinyint(1) DEFAULT 0,
+  `title` varchar(255) DEFAULT NULL,
   `admin_notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -228,13 +234,15 @@ CREATE TABLE `users` (
   `email` varchar(255) NOT NULL,
   `password` varchar(255) NOT NULL,
   `phone` varchar(255) DEFAULT NULL,
-  `role` enum('INDIVIDUAL_DONOR','CORPORATE_DONOR','RECEIVER','VOLUNTEER','ADMIN','SUPER_ADMIN') NOT NULL,
-  `status` enum('ACTIVE','INACTIVE','SUSPENDED') DEFAULT 'ACTIVE',
+  `role` enum('INDIVIDUAL_DONOR','CORPORATE_DONOR','RECIPIENT','VOLUNTEER','ADMIN','SUPER_ADMIN') NOT NULL,
+  `status` enum('ACTIVE','PENDING','INACTIVE','SUSPENDED') DEFAULT 'PENDING',
   `points` int(11) DEFAULT 0,
   `avatar` varchar(255) DEFAULT NULL,
   `selected_badge_id` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  INDEX `idx_points` (`points`),
+  INDEX `idx_role` (`role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -536,6 +544,82 @@ ALTER TABLE `broadcasts`
 ALTER TABLE `broadcast_reads`
   ADD CONSTRAINT `broadcast_reads_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `broadcast_reads_ibfk_2` FOREIGN KEY (`broadcast_id`) REFERENCES `broadcasts` (`id`) ON DELETE CASCADE;
+
+-- --------------------------------------------------------
+-- NEW TABLES FOR QUESTS & GAMIFICATION
+-- --------------------------------------------------------
+
+CREATE TABLE `quests` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `target_value` int(11) NOT NULL,
+  `reward_points` int(11) NOT NULL,
+  `category` varchar(50) DEFAULT 'DAILY',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `user_quests` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `quest_id` int(11) NOT NULL,
+  `current_value` int(11) DEFAULT 0,
+  `is_completed` tinyint(1) DEFAULT 0,
+  `last_updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `quest_id` (`quest_id`),
+  CONSTRAINT `user_quests_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `user_quests_ibfk_2` FOREIGN KEY (`quest_id`) REFERENCES `quests` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+-- NEW TABLE FOR CORPORATE AI HISTORY (LOGS)
+-- --------------------------------------------------------
+
+CREATE TABLE `corporate_ai_generations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `donor_id` int(11) NOT NULL,
+  `food_id` int(11) DEFAULT NULL,
+  `type` enum('RECIPE','PACKAGING','CSR_COPY') NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `content` longtext NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `donor_id` (`donor_id`),
+  KEY `food_id` (`food_id`),
+  CONSTRAINT `corporate_ai_generations_ibfk_1` FOREIGN KEY (`donor_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `corporate_ai_generations_ibfk_2` FOREIGN KEY (`food_id`) REFERENCES `food_items` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+-- TABLES FOR OPTIMIZATION & HISTORY (PHASE 3)
+-- --------------------------------------------------------
+
+CREATE TABLE `leaderboard_snapshots` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `points` int(11) NOT NULL,
+  `rank` int(11) NOT NULL,
+  `period` varchar(20) NOT NULL, -- e.g., 'WEEKLY', 'MONTHLY'
+  `snapshot_date` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `leaderboard_snapshots_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `user_impact_stats` (
+  `user_id` int(11) NOT NULL,
+  `total_waste_kg` decimal(10,2) DEFAULT 0.00,
+  `total_co2_kg` decimal(10,2) DEFAULT 0.00,
+  `total_water_liter` decimal(10,2) DEFAULT 0.00,
+  `total_land_sqm` decimal(10,2) DEFAULT 0.00,
+  `last_updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`user_id`),
+  CONSTRAINT `user_impact_stats_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 COMMIT;
 

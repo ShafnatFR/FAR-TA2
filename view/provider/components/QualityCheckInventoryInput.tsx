@@ -4,7 +4,7 @@ import { ArrowRight, Upload, Sparkles, Timer, Weight, ShoppingBag, MapPin, Alert
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
 import { DeliveryMethod, Address } from '../../../types';
-import { analyzeFoodQuality } from '../../../services/ai';
+import { foodVerification } from '../../../services/foodVerification';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -94,7 +94,7 @@ export const QualityCheckInventoryInput: React.FC<QualityCheckInventoryInputProp
         const portionCount = form.quantityUnit === 'Gram' ? 1 : qtyNum;
 
         // MENGIRIM SELURUH KONTEKS WAKTU UNTUK ANALISIS MIKROBIOLOGI AI
-        const result = await analyzeFoodQuality(["Makanan"], img, {
+        const result = await foodVerification.analyze(img, {
             foodName: form.name,
             ingredients: form.ingredients,
             madeTime: form.madeDateTime,
@@ -102,7 +102,7 @@ export const QualityCheckInventoryInput: React.FC<QualityCheckInventoryInputProp
             weightGram: totalWeightGram,
             packagingType: form.packaging,
             distributionStart: form.distributionStart,
-            quantityCount: portionCount // Pass quantity count
+            quantityCount: portionCount 
         });
         
         onAnalysisComplete(result, img, form);

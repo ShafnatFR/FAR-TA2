@@ -204,6 +204,21 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
   };
 
   useEffect(() => {
+    if (verificationResult.status === 'success') {
+        // Trigger confetti celebration!
+        // We use dynamic import for canvas-confetti via ESM
+        import('https://esm.sh/canvas-confetti').then(confetti => {
+            confetti.default({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#f97316', '#fbbf24', '#f59e0b', '#ffffff']
+            });
+        }).catch(e => console.error("Confetti failed", e));
+    }
+  }, [verificationResult.status]);
+
+  useEffect(() => {
     if (showScanner && scannerMode === 'camera') {
         const timer = setTimeout(() => startCamera(), 200);
         return () => {
@@ -456,7 +471,25 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
           </div>
        </div>
 
-       <div className={`flex-1 p-4 md:p-8 max-w-3xl mx-auto w-full pb-32 transition-opacity duration-300 ${isRefreshing ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+  const [leaderboardMode, setLeaderboardMode] = useState<'live' | 'history'>('live');
+  const [historicalLeaderboard, setHistoricalLeaderboard] = useState<any[]>([]);
+
+  useEffect(() => {
+     if (leaderboardMode === 'history' && historicalLeaderboard.length === 0) {
+         const fetchHistory = async () => {
+             try {
+                 const data = await db.getLeaderboardHistory('WEEKLY');
+                 setHistoricalLeaderboard(data);
+             } catch (e) {
+                 console.error("Failed to fetch history", e);
+             }
+         };
+         fetchHistory();
+     }
+  }, [leaderboardMode]);
+
+  return (
+    <div className={`flex-1 p-4 md:p-8 max-w-3xl mx-auto w-full pb-32 transition-opacity duration-300 ${isRefreshing ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
             {(activeTab === 'available' || activeTab === 'active') && (
                 <MissionList 
                     tasks={activeTab === 'available' ? availableTasks : myActiveTasks} 
@@ -470,21 +503,48 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
             )}
 
             {activeTab === 'history' && (
-                <HistoryList 
-                    history={myCompletedTasks.map(c => ({ 
-                        // FIX: handle numeric ID or string ID safely
-                        id: parseInt(String(c.id).replace(/\D/g, '') || '0'),
-                        originalId: String(c.id), // Pass original ID for accurate lookup
-                        date: c.date, 
-                        from: c.providerName, 
-                        to: 'Penerima', 
-                        items: c.foodName, 
-                        points: 150,
-                        status: c.status // Added status prop
-                    }))} 
-                    onSelect={handleHistorySelect}
-                    isLoading={isLoading}
-                />
+                <div className="space-y-10">
+                    <StatsDashboard stats={stats} />
+                    
+                    <section className="space-y-6">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-orange-600 rounded-xl">
+                                <Trophy className="w-5 h-5 text-white" />
+                            </div>
+                            <h2 className="text-xl font-black text-stone-900 dark:text-white uppercase tracking-tight italic">Peringkat Relawan</h2>
+                        </div>
+                        <Leaderboard 
+                            data={leaderboardData} 
+                            mode={leaderboardMode}
+                            onToggleMode={setLeaderboardMode}
+                            historicalData={historicalLeaderboard}
+                        />
+                    </section>
+                    
+                    <section className="space-y-6">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-stone-900 dark:bg-stone-800 rounded-xl">
+                                <History className="w-5 h-5 text-white" />
+                            </div>
+                            <h2 className="text-xl font-black text-stone-900 dark:text-white uppercase tracking-tight italic">Aktivitas Terakhir</h2>
+                        </div>
+                        <HistoryList 
+                            history={myCompletedTasks.map(c => ({ 
+                                // FIX: handle numeric ID or string ID safely
+                                id: parseInt(String(c.id).replace(/\D/g, '') || '0'),
+                                originalId: String(c.id), 
+                                date: c.date, 
+                                from: c.providerName, 
+                                to: 'Penerima', 
+                                items: c.foodName, 
+                                points: 150,
+                                status: c.status 
+                            }))} 
+                            onSelect={handleHistorySelect}
+                            isLoading={isLoading}
+                        />
+                    </section>
+                </div>
             )}
        </div>
 

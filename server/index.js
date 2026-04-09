@@ -8,6 +8,12 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const app = express();
 const port = process.env.PORT || 5000;
 
+// Modular AI Services
+const { verifyFood } = require('./services/foodVerification');
+const { generatePackagingDesign } = require('./services/packagingDesign');
+const { writeCSRCopy } = require('./services/contentWriter');
+const { scanKitchen, generateRecipe } = require('./services/kitchenScanner');
+
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
@@ -31,6 +37,19 @@ app.post('/api', async (req, res) => {
                 result = users.map(u => ({ ...u, joinDate: u.created_at || new Date().toISOString() })); 
                 break;
             case 'UPSERT_USER': result = await upsertUser(data); break;
+            
+            // --- AI KEY MANAGEMENT ---
+            case 'GET_USER_AI_KEYS': 
+                const [userKeys] = await db.query('SELECT id, label, created_at FROM user_ai_keys WHERE user_id = ?', [data.userId]);
+                result = userKeys;
+                break;
+            case 'ADD_USER_AI_KEY':
+                result = await db.query('INSERT INTO user_ai_keys (user_id, api_key, label) VALUES (?, ?, ?)', [data.userId, data.apiKey, data.label]);
+                await logAction(data.userId, null, 'Add AI Key', `Menyimpan API Key pribadi: ${data.label}`);
+                break;
+            case 'DELETE_USER_AI_KEY':
+                result = await db.query('DELETE FROM user_ai_keys WHERE id = ? AND user_id = ?', [data.id, data.userId]);
+                break;
             
             case 'GET_ADDRESSES': result = await getAddresses(data.userId); break;
             case 'ADD_ADDRESS': result = await addAddress(data); break;
@@ -98,6 +117,17 @@ app.post('/api', async (req, res) => {
                 result = await deleteFAQ(data.id); 
                 await logAction(data.actor?.id, data.actor?.name, 'Delete FAQ', `Hapus FAQ ID: ${data.id}`, 'warning');
                 break;
+
+            case 'GET_SYSTEM_LOGS':
+                const [logs] = await db.query('SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 200');
+                result = logs;
+                break;
+            
+            case 'GENERATE_SNAPSHOT':
+                const { generateLeaderboardSnapshot } = require('./services/leaderboardService');
+                result = await generateLeaderboardSnapshot('MANUAL');
+                await logAction(data.actor?.id, data.actor?.name, 'Manual Snapshot', 'Memicu pengarsipan leaderboard manual');
+                break;
             case 'ASSIGN_VOLUNTEER': 
                 result = await assignVolunteer(data.claimId, data.volunteerId, data.volunteerName); 
                 await logAction(data.actor?.id, data.actor?.name, 'Assign Volunteer', `Tugaskan ${data.volunteerName} ke Klaim #${data.claimId}`);
@@ -116,40 +146,98 @@ app.post('/api', async (req, res) => {
                 result = `http://localhost:${port}${filePath}`;
                 break;
 
+            case 'VERIFY_FOOD':
+                result = await verifyFood(data.payload, data.actorId);
+                break;
+
             case 'CORPORATE_AI':
-                // Role check: Fitur ini khusus untuk korporat
-                if (data.role !== 'corporate_donor') {
-                    throw new Error("Akses ditolak. Fitur AI Lanjutan hanya tersedia untuk Donatur Korporat.");
+                // Role check: Relawan tidak boleh mengakses fitur ini
+                if (data.role === 'VOLUNTEER') {
+                    throw new Error("Akses ditolak. Fitur AI tidak tersedia untuk Relawan.");
                 }
-                const { callCorporateAI } = require('./services/aiCorporate');
-                result = await callCorporateAI(data.type, data.payload);
+
+                switch (data.type) {
+                    case 'DESIGN_PACKAGING':
+                        result = await generatePackagingDesign(data.payload, data.actorId);
+                        break;
+                    case 'WRITE_CSR_COPY':
+                        result = await writeCSRCopy(data.payload, data.actorId);
+                        break;
+                    case 'KITCHEN_SCANNER':
+                        result = await scanKitchen(data.payload, data.actorId);
+                        break;
+                    case 'GENERATE_RECIPE':
+                        result = await generateRecipe(data.payload, data.actorId);
+                        break;
+                    default:
+                        // Legacy support for other types if any, or throw
+                        throw new Error(`AI type ${data.type} not supported in modular mode.`);
+                }
+                break;
+
+            case 'GET_QUESTS': result = await getQuests(data.userId); break;
+            case 'UPDATE_QUEST_PROGRESS': result = await updateQuestProgress(data.userId, data.questId, data.value); break;
+            
+            case 'GET_LEADERBOARD': 
+                const [leaderboardRows] = await db.query(
+                    'SELECT id, name, points, avatar, role FROM users ' + 
+                    'WHERE role = "VOLUNTEER" ORDER BY points DESC LIMIT 10'
+                );
+                result = leaderboardRows.map((u, index) => ({
+                    ...u,
+                    rank: index + 1,
+                    avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random`
+                }));
+                break;
+
+            case 'GET_LEADERBOARD_HISTORY':
+                const [histRows] = await db.query(
+                    'SELECT ls.*, u.name, u.avatar FROM leaderboard_snapshots ls ' +
+                    'JOIN users u ON ls.user_id = u.id WHERE ls.period = ? ORDER BY ls.snapshot_date DESC, ls.rank ASC LIMIT 50',
+                    [data.period || 'WEEKLY']
+                );
+                result = histRows;
+                break;
+
+            case 'GET_CORPORATE_AI_HISTORY': 
+                const [histAiRows] = await db.query('SELECT * FROM corporate_ai_generations WHERE donor_id = ? ORDER BY created_at DESC', [data.donorId]);
+                result = histAiRows;
+                break;
+            case 'SAVE_CORPORATE_AI_RESULT':
+                const [insResult] = await db.query(
+                    'INSERT INTO corporate_ai_generations (donor_id, food_id, type, title, content) VALUES (?, ?, ?, ?, ?)',
+                    [data.donorId, data.foodId, String(data.type).toUpperCase(), data.title, data.content]
+                );
+                result = { id: insResult.insertId, success: true, message: "Berhasil menyimpan hasil AI." };
+                break;
+            case 'GENERATE_SNAPSHOT':
+                result = await generateLeaderboardSnapshot(data.period || 'WEEKLY');
                 break;
 
             default:
-                return res.status(400).json({ status: 'error', message: `Action '${action}' not found` });
+                return res.status(400).json({ status: 'error', message: `Aksi '${action}' tidak ditemukan.` });
         }
 
         res.json({ status: 'success', data: result });
     } catch (error) {
-        console.error(`[ERROR] ${action}:`, error);
+        console.error(`[SERVER ERROR] ${action}:`, error);
         
         let statusCode = error.statusCode || 500;
         
-        // Fallback mapping for generic errors that don't have a status code set
         if (!error.statusCode) {
             const msg = error.message.toLowerCase();
             if (msg.includes('email atau password salah') || msg.includes('tidak valid')) {
                 statusCode = 401;
             } else if (msg.includes('sudah terdaftar')) {
                 statusCode = 409;
-            } else if (msg.includes('not found') || msg.includes('tidak ditemukan')) {
+            } else if (msg.includes('tidak ditemukan')) {
                 statusCode = 404;
-            } else if (msg.includes('stock not enough') || msg.includes('must have')) {
+            } else if (msg.includes('stok tidak cukup')) {
                 statusCode = 400;
             }
         }
         
-        res.status(statusCode).json({ status: 'error', message: error.message });
+        res.status(statusCode).json({ status: 'error', message: error.message || 'Terjadi kesalahan sistem.' });
     }
 });
 
@@ -157,7 +245,7 @@ app.post('/api', async (req, res) => {
 const ROLE_MAP = {
     'individual_donor': 'INDIVIDUAL_DONOR',
     'corporate_donor': 'CORPORATE_DONOR',
-    'recipient': 'RECEIVER',
+    'recipient': 'RECIPIENT',
     'volunteer': 'VOLUNTEER',
     'admin': 'ADMIN',
     'super_admin': 'SUPER_ADMIN'
@@ -191,9 +279,9 @@ async function registerUser(data) {
 
     const [result] = await db.query(
         'INSERT INTO users (name, email, password, role, phone, avatar, points, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, email, password, mapRole(role), phone, avatar, 0, 'ACTIVE']
+        [name, email, password, mapRole(role), phone, avatar, 0, 'PENDING']
     );
-    return { id: result.insertId, ...data, isNewUser: true, status: 'ACTIVE', points: 0 };
+    return { id: result.insertId, ...data, isNewUser: true, status: 'PENDING', points: 0 };
 }
 
 async function loginUser(data) {
@@ -448,8 +536,8 @@ async function addFoodItem(data) {
 
         // 1. Insert food_items
         const [foodResult] = await connection.query(
-            'INSERT INTO food_items (provider_id, name, description, initial_quantity, current_quantity, min_quantity, max_quantity, expiry_time, distribution_start_time, distribution_end_time, delivery_method, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [providerId, name, description, initialQuantity, currentQuantity, data.minQuantity || 1, data.maxQuantity || initialQuantity, expiryDateTime, distStart, distEnd, deliveryMethod.toUpperCase(), imageUrl]
+            'INSERT INTO food_items (provider_id, name, description, initial_quantity, current_quantity, min_quantity, max_quantity, expiry_time, distribution_start_time, distribution_end_time, delivery_method, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [providerId, name, description, initialQuantity, currentQuantity, data.minQuantity || 1, data.maxQuantity || initialQuantity, expiryDateTime, distStart, distEnd, deliveryMethod.toUpperCase(), (data.category || 'OTHER').toUpperCase(), imageUrl]
         );
         const foodId = foodResult.insertId;
 
@@ -728,13 +816,18 @@ async function verifyOrderQR(data) {
     if (rows.length === 0) throw new Error('Kode tidak valid');
     if (rows[0].is_scanned) return { success: false, message: 'ALREADY_SCANNED' };
 
-    // 1. Mark as scanned and complete
-    await db.query('UPDATE claims SET is_scanned = 1, status = "COMPLETED" WHERE id = ?', [rows[0].id]);
+    // 1. Mark as scanned and complete with audit trail
+    const scannerId = data.actorId || rows[0].provider_id; 
+    await db.query('UPDATE claims SET is_scanned = 1, status = "COMPLETED", scanned_at = CURRENT_TIMESTAMP, scanned_by_id = ? WHERE id = ?', [scannerId, rows[0].id]);
     
+    // 1.5 Update Impact Cache (Phase 3)
+    await syncUserImpact(rows[0].receiver_id);
+    await syncUserImpact(rows[0].provider_id);
+    if (rows[0].volunteer_id) await syncUserImpact(rows[0].volunteer_id);
+
     // 2. Add points for the person who did the scanning (Handover Point)
     // For now, if scannedByProviderName is provided, we use the provider_id from the claim
     // Or we could pass actorId in data.
-    const scannerId = data.actorId || rows[0].provider_id; 
     const pointsData = await addPoints(scannerId, 50, 'QR Handover - Serah Terima Makanan', rows[0].id);
 
     return { 
@@ -790,14 +883,150 @@ async function updateReportStatus(id, status) {
     return { id: dbId, status: dbStatus };
 }
 
-async function sendBroadcast(data) {
-    const { title, content, target } = data;
+async function getQuests(userId) {
+    // 1. Ensure user has current daily quests
+    const [userQuests] = await db.query(
+        'SELECT uq.*, q.title, q.target_value as target, q.reward_points as reward, q.description ' +
+        'FROM user_quests uq JOIN quests q ON uq.quest_id = q.id WHERE uq.user_id = ?', 
+        [userId]
+    );
+
+    const now = new Date();
+    const isDifferentDay = (date1, date2) => {
+        return date1.getFullYear() !== date2.getFullYear() ||
+               date1.getMonth() !== date2.getMonth() ||
+               date1.getDate() !== date2.getDate();
+    };
+
+    const needsReset = userQuests.length > 0 && isDifferentDay(new Date(userQuests[0].last_updated), now);
+
+    if (userQuests.length === 0 || needsReset) {
+        if (needsReset) {
+            console.log(`[QUESTS] Daily reset for UserID: ${userId}`);
+            await db.query('DELETE FROM user_quests WHERE user_id = ?', [userId]);
+        }
+        
+        // Initial assignment: Pick 3 random quests
+        const [masterQuests] = await db.query('SELECT id FROM quests ORDER BY RAND() LIMIT 3');
+        for (const q of masterQuests) {
+            await db.query('INSERT INTO user_quests (user_id, quest_id, current_value, is_completed) VALUES (?, ?, 0, 0)', [userId, q.id]);
+        }
+        // Fetch again
+        const [newQuests] = await db.query(
+            'SELECT uq.*, q.title, q.target_value as target, q.reward_points as reward, q.description ' +
+            'FROM user_quests uq JOIN quests q ON uq.quest_id = q.id WHERE uq.user_id = ?', 
+            [userId]
+        );
+        return newQuests.map(q => ({ ...q, completed: !!q.is_completed }));
+    }
+
+    return userQuests.map(q => ({ ...q, completed: !!q.is_completed }));
+}
+
+async function updateQuestProgress(userId, questId, value) {
+    await db.query(
+        'UPDATE user_quests SET current_value = current_value + ? WHERE user_id = ? AND quest_id = ?',
+        [value, userId, questId]
+    );
+    
+    // Check if completed
+    const [rows] = await db.query(
+        'SELECT uq.*, q.target_value, q.reward_points FROM user_quests uq JOIN quests q ON uq.quest_id = q.id WHERE uq.user_id = ? AND uq.quest_id = ?',
+        [userId, questId]
+    );
+    
+    if (rows.length > 0 && !rows[0].is_completed && rows[0].current_value >= rows[0].target_value) {
+        await db.query('UPDATE user_quests SET is_completed = 1 WHERE id = ?', [rows[0].id]);
+        // Award points
+        await addPoints(userId, rows[0].reward_points, `Quest Completed: ${rows[0].id}`);
+        return { ...rows[0], completed: true, justCompleted: true };
+    }
+    
+    return { success: true };
+}
+
+async function syncUserImpact(userId) {
     try {
-        const [result] = await db.query('INSERT INTO notifications (title, content, target) VALUES (?, ?, ?)', [title, content, target.toUpperCase()]);
-        return { id: result.insertId, ...data, sentAt: new Date() };
+        // Calculate total impact from COMPLETED claims
+        const [impactRows] = await db.query(`
+            SELECT 
+                SUM(c.claimed_quantity * 0.45) as waste_kg,
+                SUM(si.co2_per_portion * c.claimed_quantity) as co2_kg,
+                SUM(si.water_saved_liter * c.claimed_quantity) as water_liter,
+                SUM(si.land_saved_sqm * c.claimed_quantity) as land_sqm
+            FROM claims c
+            JOIN food_items f ON c.food_id = f.id
+            LEFT JOIN social_impacts si ON f.id = si.food_id
+            WHERE (c.receiver_id = ? OR c.provider_id = ? OR c.volunteer_id = ?)
+            AND c.status = 'COMPLETED'
+        `, [userId, userId, userId]);
+
+        if (impactRows.length > 0) {
+            const data = impactRows[0];
+            await db.query(`
+                INSERT INTO user_impact_stats (user_id, total_waste_kg, total_co2_kg, total_water_liter, total_land_sqm)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    total_waste_kg = VALUES(total_waste_kg),
+                    total_co2_kg = VALUES(total_co2_kg),
+                    total_water_liter = VALUES(total_water_liter),
+                    total_land_sqm = VALUES(total_land_sqm)
+            `, [userId, data.waste_kg || 0, data.co2_kg || 0, data.water_liter || 0, data.land_sqm || 0]);
+        }
     } catch (e) {
-        console.warn('Notifications table not found');
-        return data;
+        console.error(`[IMPACT SYNC ERROR] UserID ${userId}:`, e);
+    }
+}
+
+async function generateLeaderboardSnapshot(period = 'WEEKLY') {
+    const [topVolunteers] = await db.query(
+        'SELECT id, points FROM users WHERE role = "VOLUNTEER" ORDER BY points DESC LIMIT 10'
+    );
+    
+    const today = new Date().toISOString().split('T')[0];
+    for (let i = 0; i < topVolunteers.length; i++) {
+        const v = topVolunteers[i];
+        await db.query(
+            'INSERT INTO leaderboard_snapshots (user_id, points, rank, period, snapshot_date) VALUES (?, ?, ?, ?, ?)',
+            [v.id, v.points, i + 1, period, today]
+        );
+    }
+    return { success: true, count: topVolunteers.length, date: today };
+}
+
+async function sendBroadcast(data, actor) {
+    const { title, content, target, type } = data;
+    try {
+        // 1. Log the broadcast action
+        await logAction(actor?.id, actor?.name, 'Global Broadcast', `Kirim pengumuman: ${title}`);
+
+        // 2. Insert into notifications for all users matching the target role
+        let queryUsers = 'SELECT id FROM users';
+        const params = [];
+        if (target && target !== 'all') {
+            queryUsers += ' WHERE role = ?';
+            params.push(mapRole(target));
+        }
+
+        const [users] = await db.query(queryUsers, params);
+        
+        for (const user of users) {
+            await db.query(
+                'INSERT INTO notifications (user_id, title, message, type, is_read) VALUES (?, ?, ?, ?, ?)',
+                [user.id, title, content, type || 'info', 0]
+            );
+        }
+
+        // 3. Store in broadcasts table for history
+        const [result] = await db.query(
+            'INSERT INTO broadcasts (title, content, target, type, author_id) VALUES (?, ?, ?, ?, ?)',
+            [title, content, target, type || 'info', actor?.id]
+        );
+
+        return { id: result.insertId, ...data, sentAt: new Date(), readCount: 0 };
+    } catch (e) {
+        console.error('[BROADCAST ERROR]', e);
+        throw e;
     }
 }
 

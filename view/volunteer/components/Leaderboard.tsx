@@ -5,14 +5,30 @@ import { LeaderboardItem } from '../../../types';
 
 interface LeaderboardProps {
     data: LeaderboardItem[];
+    mode?: 'live' | 'history';
+    onToggleMode?: (mode: 'live' | 'history') => void;
+    historicalData?: any[];
 }
 
-export const Leaderboard: React.FC<LeaderboardProps> = ({ data }) => {
-    // Kita asumsikan data sudah terurut berdasarkan poin tertinggi
-    const top1 = data.find(i => i.rank === 1);
-    const top2 = data.find(i => i.rank === 2);
-    const top3 = data.find(i => i.rank === 3);
-    const others = data.filter(i => i.rank > 3);
+export const Leaderboard: React.FC<LeaderboardProps> = ({ 
+    data, 
+    mode = 'live', 
+    onToggleMode, 
+    historicalData = [] 
+}) => {
+    const isLive = mode === 'live';
+    const displayData = isLive ? data : historicalData.map(h => ({
+        id: h.user_id,
+        name: h.name,
+        points: h.points,
+        rank: h.rank,
+        avatar: h.avatar
+    }));
+
+    const top1 = displayData.find(i => i.rank === 1);
+    const top2 = displayData.find(i => i.rank === 2);
+    const top3 = displayData.find(i => i.rank === 3);
+    const others = displayData.filter(i => i.rank > 3);
 
     return (
         <div className="space-y-4">
@@ -23,7 +39,23 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ data }) => {
                     <h2 className="flex items-center justify-center gap-2 text-xl font-extrabold tracking-tight">
                         <Crown className="w-6 h-6 text-yellow-400 fill-yellow-400" /> Papan Peringkat
                     </h2>
-                    <p className="text-sm font-medium opacity-90">Relawan terbaik minggu ini</p>
+                    <p className="text-sm font-medium opacity-90">{isLive ? 'Relawan terbaik saat ini' : 'Arsip Juara di masa lalu'}</p>
+
+                    {/* Toggle Buttons */}
+                    <div className="flex bg-black/20 p-1 rounded-xl mt-4 w-fit mx-auto border border-white/10">
+                        <button 
+                            onClick={() => onToggleMode?.('live')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isLive ? 'bg-white text-orange-600 shadow-md' : 'text-white/60 hover:text-white'}`}
+                        >
+                            Live
+                        </button>
+                        <button 
+                            onClick={() => onToggleMode?.('history')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!isLive ? 'bg-white text-orange-600 shadow-md' : 'text-white/60 hover:text-white'}`}
+                        >
+                            Sejarah
+                        </button>
+                    </div>
                 </div>
                 
                 {/* Podium Grid */}

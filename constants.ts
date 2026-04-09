@@ -55,7 +55,7 @@ export const SOCIAL_SYSTEM: { [key: string]: SocialSystemConfig } = {
       { action: "Verifikasi QC", points: 15, description: "Membantu cek kualitas makanan di lokasi" }
     ]
   },
-  receiver: {
+  recipient: {
     tiers: [
       { id: '1', name: "Member Baru", minPoints: 0, benefits: ["Maks 1 Klaim Aktif"], color: "bg-stone-400", icon: "👋" },
       { id: '2', name: "Terpercaya (Trusted)", minPoints: 100, benefits: ["Maks 3 Klaim Aktif", "Bisa Request Delivery"], color: "bg-teal-500", icon: "🛡️" },

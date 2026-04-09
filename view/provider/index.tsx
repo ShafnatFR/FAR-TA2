@@ -8,6 +8,7 @@ import { OnboardingTour } from '../common/OnboardingTour';
 import { ImpactWidget } from './components/Dashboard/ImpactWidget';
 import { NearbyRequests } from './components/Dashboard/NearbyRequests';
 import { CorporateAIWidgets } from './components/CorporateAIWidgets';
+import { KitchenScanner } from '../common/KitchenScanner';
 import { db } from '../../services/db';
 
 interface ProviderIndexProps {
@@ -35,6 +36,7 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
 }) => {
   const [socialImpact, setSocialImpact] = useState<any>(null);
   const [isLoadingImpact, setIsLoadingImpact] = useState(true);
+  const [showKitchenScanner, setShowKitchenScanner] = useState(false);
   
   const userName = currentUser?.name || 'Restoran Berkah';
 
@@ -104,6 +106,25 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
                     <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-orange-600 border-2 border-white rounded-full animate-pulse"></span>
                 </button>
             </header>
+
+            <div className="mb-8 p-6 bg-gradient-to-br from-orange-500 to-orange-600 rounded-[2.5rem] shadow-xl shadow-orange-500/20 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl group-hover:scale-125 transition-transform duration-700"></div>
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-white/20 backdrop-blur-md rounded-full text-[9px] font-black text-white uppercase tracking-widest">Fitur Baru</span>
+                        </div>
+                        <h3 className="text-xl font-black text-white leading-tight">Gak tahu mau masak apa? <br/> Foto bahan makananmu di sini!</h3>
+                        <p className="text-white/70 text-[10px] font-medium uppercase tracking-widest">AI rekomendasikan resep sisa pangan kreatif</p>
+                    </div>
+                    <button 
+                        onClick={() => setShowKitchenScanner(true)}
+                        className="px-8 py-4 bg-white text-orange-600 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-orange-50 transition-all shadow-lg active:scale-95"
+                    >
+                        Buka Kitchen AI
+                    </button>
+                </div>
+            </div>
             
             <DashboardStats 
                 setActiveTab={onNavigate} 
@@ -119,6 +140,13 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
                 <CorporateAIWidgets currentUser={currentUser} foodItems={foodItems} />
             )}
         </div>
+
+        {showKitchenScanner && (
+            <KitchenScanner 
+                currentUser={currentUser} 
+                onBack={() => setShowKitchenScanner(false)} 
+            />
+        )}
     </>
   );
 };
