@@ -35,6 +35,7 @@ export const FoodDetail: React.FC<FoodDetailProps> = ({ item, onBack, onClaim, i
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [claimQuantity, setClaimQuantity] = useState(minAllowed); 
   const [selectedMethod, setSelectedMethod] = useState<'pickup' | 'delivery'>('pickup');
+  const [showStockWarning, setShowStockWarning] = useState(false);
 
   // State to track if receiver has setup an address
   const [hasAddress, setHasAddress] = useState<boolean | null>(null);
@@ -70,9 +71,10 @@ export const FoodDetail: React.FC<FoodDetailProps> = ({ item, onBack, onClaim, i
 
   useEffect(() => {
       setClaimQuantity(minAllowed);
-      if (item.deliveryMethod === 'delivery') setSelectedMethod('delivery');
+      // Auto-switch to pickup if stock < 5 or default method is pickup
+      if (item.deliveryMethod === 'delivery' && stockAvailable >= 5) setSelectedMethod('delivery');
       else setSelectedMethod('pickup');
-  }, [item, minAllowed]);
+  }, [item, minAllowed, stockAvailable]);
 
   const handleClaimClick = () => {
     if (isThisItemActive || !hasAddress || isOutOfStock) return;
@@ -224,7 +226,12 @@ export const FoodDetail: React.FC<FoodDetailProps> = ({ item, onBack, onClaim, i
                 {item.deliveryMethod === 'both' && (
                     <div className="bg-stone-100 dark:bg-stone-800 p-1 rounded-xl flex gap-1">
                         <button onClick={() => setSelectedMethod('pickup')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase transition-all ${selectedMethod === 'pickup' ? 'bg-white dark:bg-stone-700 text-orange-600 shadow-sm' : 'text-stone-500'}`}><Package className="w-4 h-4" /> Ambil Sendiri</button>
-                        <button onClick={() => setSelectedMethod('delivery')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase transition-all ${selectedMethod === 'delivery' ? 'bg-white dark:bg-stone-700 text-blue-600 shadow-sm' : 'text-stone-500'}`}><Truck className="w-4 h-4" /> Diantar Relawan</button>
+                        <button 
+                            onClick={stockAvailable < 5 ? () => setShowStockWarning(true) : () => setSelectedMethod('delivery')} 
+                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase transition-all ${selectedMethod === 'delivery' ? 'bg-white dark:bg-stone-700 text-blue-600 shadow-sm' : 'text-stone-500'} ${stockAvailable < 5 ? 'opacity-60' : ''}`}
+                        >
+                            <Truck className="w-4 h-4" /> Diantar Relawan {stockAvailable < 5 && <span className="ml-1 text-[8px] bg-red-100 text-red-600 px-1 rounded-md">LIMITED</span>}
+                        </button>
                     </div>
                 )}
 
@@ -281,6 +288,41 @@ export const FoodDetail: React.FC<FoodDetailProps> = ({ item, onBack, onClaim, i
                         <Button variant="outline" className="flex-1 rounded-2xl" onClick={() => setShowConfirmModal(false)}>Batal</Button>
                         <Button className="flex-1 rounded-2xl bg-orange-600 hover:bg-orange-700" onClick={confirmClaim}>Ya, Yakin</Button>
                     </div>
+                </div>
+            </div>
+        )}
+
+        {/* Stage 2 Warning Modal */}
+        {showStockWarning && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-white/10 backdrop-blur-xl animate-in fade-in">
+                <div className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-2xl p-8 rounded-[2.5rem] max-w-sm w-full shadow-2xl border border-white/20 relative overflow-hidden text-center">
+                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl"></div>
+                    <div className="w-20 h-20 bg-orange-100 dark:bg-orange-950/50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                        <AlertCircle className="w-10 h-10 text-orange-600" />
+                    </div>
+                    <h3 className="text-2xl font-black text-stone-900 dark:text-white mb-3 tracking-tight">Ketersediaan Kurir</h3>
+                    <p className="text-stone-600 dark:text-stone-400 text-sm mb-8 leading-relaxed">
+                        Maaf, relawan pengantar tidak tersedia jika sisa porsi <span className="font-bold text-orange-600">kurang dari 5</span>. Ini untuk menjaga efisiensi rute relawan kami.
+                    </p>
+                    
+                    <div className="bg-stone-100 dark:bg-stone-800/50 p-4 rounded-2xl mb-8 text-left border border-white/5">
+                        <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2">Solusi Lain:</p>
+                        <ul className="space-y-2">
+                             <li className="flex items-center gap-2 text-xs font-bold text-stone-700 dark:text-stone-300">
+                                 <CheckCircle className="w-3.5 h-3.5 text-green-500" /> Gunakan Self-Pickup (Ambil Sendiri)
+                             </li>
+                             <li className="flex items-center gap-2 text-xs font-bold text-stone-700 dark:text-stone-300">
+                                 <MessageCircle className="w-3.5 h-3.5 text-blue-500" /> Hubungi pemilik untuk COD via WA
+                             </li>
+                        </ul>
+                    </div>
+
+                    <Button 
+                        className="w-full h-14 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-black uppercase tracking-widest shadow-lg shadow-orange-500/20" 
+                        onClick={() => setShowStockWarning(false)}
+                    >
+                        MENGERTI
+                    </Button>
                 </div>
             </div>
         )}

@@ -4,12 +4,14 @@ import { ArrowRight, Check, X, Sparkles, ScanLine, QrCode, Trophy, HeartHandshak
 import { Button } from '../components/Button';
 
 interface OnboardingTourProps {
-    role: 'provider' | 'volunteer' | 'receiver';
+    role: 'individual_donor' | 'corporate_donor' | 'volunteer' | 'recipient';
     onFinish: () => void;
 }
 
 export const OnboardingTour: React.FC<OnboardingTourProps> = ({ role, onFinish }) => {
     const [currentStep, setCurrentStep] = useState(0);
+
+    const isProvider = role === 'individual_donor' || role === 'corporate_donor';
 
     // Konten Tour Khusus Provider
     const providerSteps = [
@@ -47,7 +49,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ role, onFinish }
     ];
 
     // Fallback jika role lain belum didefinisikan, gunakan provider steps sementara
-    const steps = role === 'provider' ? providerSteps : providerSteps;
+    const steps = isProvider ? providerSteps : providerSteps;
     const totalSteps = steps.length;
 
     const handleNext = () => {

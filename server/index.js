@@ -116,6 +116,15 @@ app.post('/api', async (req, res) => {
                 result = `http://localhost:${port}${filePath}`;
                 break;
 
+            case 'CORPORATE_AI':
+                // Role check: Fitur ini khusus untuk korporat
+                if (data.role !== 'corporate_donor') {
+                    throw new Error("Akses ditolak. Fitur AI Lanjutan hanya tersedia untuk Donatur Korporat.");
+                }
+                const { callCorporateAI } = require('./services/aiCorporate');
+                result = await callCorporateAI(data.type, data.payload);
+                break;
+
             default:
                 return res.status(400).json({ status: 'error', message: `Action '${action}' not found` });
         }
@@ -146,10 +155,11 @@ app.post('/api', async (req, res) => {
 
 // --- HELPERS ---
 const ROLE_MAP = {
-    'provider': 'DONATUR',
-    'receiver': 'PENERIMA',
-    'volunteer': 'RELAWAN',
-    'admin_manager': 'ADMIN',
+    'individual_donor': 'INDIVIDUAL_DONOR',
+    'corporate_donor': 'CORPORATE_DONOR',
+    'recipient': 'RECEIVER',
+    'volunteer': 'VOLUNTEER',
+    'admin': 'ADMIN',
     'super_admin': 'SUPER_ADMIN'
 };
 
@@ -278,6 +288,31 @@ async function upsertUser(data) {
     } else {
         return registerUser(data);
     }
+}
+
+// --- HELPER: Gamified Points System ---
+async function addPoints(userId, amount, activityType, referenceId = null) {
+    if (!userId || amount === 0) return;
+    
+    console.log(`[POINTS] Adding ${amount} to UserID: ${userId} (${activityType})`);
+    
+    // 1. Update total points in users table
+    await db.query('UPDATE users SET points = points + ? WHERE id = ?', [amount, userId]);
+    
+    // 2. Log to point_histories
+    await db.query(
+        'INSERT INTO point_histories (user_id, amount, activity_type, reference_id) VALUES (?, ?, ?, ?)',
+        [userId, amount, activityType, referenceId]
+    );
+
+    // 3. Optional: Trigger a notification (simplified)
+    const notifMsg = `Selamat! Anda baru saja mendapatkan ${amount} poin dari ${activityType}.`;
+    await db.query(
+        'INSERT INTO notifications (user_id, title, message, type, is_read) VALUES (?, ?, ?, ?, ?)',
+        [userId, 'Poin Bertambah!', notifMsg, 'achievement', 0]
+    );
+    
+    return { success: true, pointsAdded: amount };
 }
 
 async function getAddresses(userId) {
@@ -573,7 +608,13 @@ async function processClaim(payload) {
         await connection.beginTransaction();
         const [inv] = await connection.query('SELECT current_quantity FROM food_items WHERE id = ? FOR UPDATE', [foodId]);
         if (inv.length === 0) throw new Error('Item not found');
-        if (inv[0].current_quantity < quantityToReduce) throw new Error('Stock not enough');
+        if (inv[0].current_quantity < quantityToReduce) throw new Error('Stok tidak cukup');
+
+        // Stage 2: Stock-Based Pickup Logic
+        // If stock < 5, only Self Pickup is allowed.
+        if (inv[0].current_quantity < 5 && claimData.deliveryMethod.toLowerCase() === 'delivery') {
+             throw new Error('Sisa porsi kurang dari 5. Relawan tidak tersedia, silakan pilih jemput sendiri (Self Pickup).');
+        }
 
         const newStock = inv[0].current_quantity - quantityToReduce;
         await connection.query('UPDATE food_items SET current_quantity = ? WHERE id = ?', [newStock, foodId]);
@@ -682,13 +723,27 @@ async function updateClaimStatus(id, status, additionalData) {
 }
 
 async function verifyOrderQR(data) {
-    const { uniqueCode } = data;
+    const { uniqueCode, scannedByProviderName } = data;
     const [rows] = await db.query('SELECT * FROM claims WHERE unique_code = ?', [uniqueCode]);
     if (rows.length === 0) throw new Error('Kode tidak valid');
     if (rows[0].is_scanned) return { success: false, message: 'ALREADY_SCANNED' };
 
+    // 1. Mark as scanned and complete
     await db.query('UPDATE claims SET is_scanned = 1, status = "COMPLETED" WHERE id = ?', [rows[0].id]);
-    return { success: true, message: 'VERIFIED', claimId: rows[0].id };
+    
+    // 2. Add points for the person who did the scanning (Handover Point)
+    // For now, if scannedByProviderName is provided, we use the provider_id from the claim
+    // Or we could pass actorId in data.
+    const scannerId = data.actorId || rows[0].provider_id; 
+    const pointsData = await addPoints(scannerId, 50, 'QR Handover - Serah Terima Makanan', rows[0].id);
+
+    return { 
+        success: true, 
+        message: 'VERIFIED', 
+        claimId: rows[0].id,
+        foodName: rows[0].food_name, 
+        pointsEarned: 50 
+    };
 }
 
 async function submitReview(data) {
@@ -1349,10 +1404,16 @@ async function getBroadcasts() {
 }
 
 async function sendBroadcast(msgData, actor) {
-    const { title, content, target, type } = msgData;
+    let { title, content, target, type } = msgData;
+    
+    // Normalize target for DB storage
+    if (target === 'recipient') target = 'receiver';
+    if (target === 'individual_donor' || target === 'corporate_donor') target = 'provider';
+    if (target === 'admin' || target === 'super_admin') target = 'admin';
+
     const [result] = await db.query(
         'INSERT INTO broadcasts (title, content, target, type, author_id) VALUES (?, ?, ?, ?, ?)',
-        [title, content, target, type || 'info', actor?.id]
+        [title, content, target || 'all', type || 'info', actor?.id]
     );
     
     await logAction(actor?.id, actor?.name, 'Send Broadcast', `Kirim pengumuman: ${title} (Target: ${target})`);
@@ -1380,16 +1441,16 @@ async function getUserNotifications(userId, role) {
     console.log(`[NOTIF-ENGINE] Fetching for UserID: ${userId}, Role: ${role}`);
 
     // Normalize role for broadcast target matching
-    // Front-end might send 'provider', 'volunteer', 'receiver', 'admin_manager', 'super_admin'
-    // Back-end targets in DB: 'all', 'provider', 'volunteer', 'receiver', 'admin'
+    // Front-end sends: 'individual_donor', 'corporate_donor', 'recipient', 'volunteer', 'admin', 'super_admin'
+    // Back-end targets in DB (legacy mapping): 'all', 'provider', 'volunteer', 'receiver', 'admin'
     let broadcastTarget = String(role || '').toLowerCase().trim();
-    if (broadcastTarget === 'admin_manager' || broadcastTarget === 'super_admin' || broadcastTarget === 'admin' || broadcastTarget === 'super_admin') {
+    if (broadcastTarget === 'super_admin' || broadcastTarget === 'admin') {
         broadcastTarget = 'admin';
-    } else if (broadcastTarget === 'donatur') {
+    } else if (broadcastTarget === 'individual_donor' || broadcastTarget === 'corporate_donor' || broadcastTarget === 'provider') {
         broadcastTarget = 'provider';
-    } else if (broadcastTarget === 'relawan') {
+    } else if (broadcastTarget === 'volunteer') {
         broadcastTarget = 'volunteer';
-    } else if (broadcastTarget === 'penerima') {
+    } else if (broadcastTarget === 'recipient' || broadcastTarget === 'receiver') {
         broadcastTarget = 'receiver';
     }
 

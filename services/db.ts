@@ -127,4 +127,8 @@ export const db = {
   getSystemLogs: () => sendRequest<SystemLog[]>('GET_SYSTEM_LOGS'),
   upsertAdmin: (admin: any, actor: any) => sendRequest<any>('UPSERT_ADMIN', { admin, actor }),
   deleteAdmin: (id: string, actor: any) => sendRequest<any>('DELETE_ADMIN', { id, actor }),
+  
+  // --- CORPORATE AI ---
+  callCorporateAI: (type: 'GENERATE_RECIPE' | 'DESIGN_PACKAGING' | 'WRITE_CSR_COPY', role: string, payload: any) => 
+    sendRequest<any>('CORPORATE_AI', { type, role, payload }),
 };

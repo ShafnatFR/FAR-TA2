@@ -137,12 +137,26 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate, currentUser }) =
     };
 
     const getRoleLabel = (role: string) => {
-        const map: { [k: string]: string } = { provider: 'Donatur', receiver: 'Penerima', volunteer: 'Relawan', admin_manager: 'Admin', super_admin: 'Super Admin' };
+        const map: { [k: string]: string } = { 
+            individual_donor: 'Donatur (Individu)', 
+            corporate_donor: 'Donatur (Korporat)', 
+            recipient: 'Penerima', 
+            volunteer: 'Relawan', 
+            admin: 'Admin', 
+            super_admin: 'Super Admin' 
+        };
         return map[role] || role;
     };
 
     const getRoleColor = (role: string) => {
-        const map: { [k: string]: string } = { provider: 'bg-blue-500', receiver: 'bg-emerald-500', volunteer: 'bg-orange-500', admin_manager: 'bg-purple-500', super_admin: 'bg-red-500' };
+        const map: { [k: string]: string } = { 
+            individual_donor: 'bg-blue-500', 
+            corporate_donor: 'bg-blue-600', 
+            recipient: 'bg-emerald-500', 
+            volunteer: 'bg-orange-500', 
+            admin: 'bg-purple-500', 
+            super_admin: 'bg-red-500' 
+        };
         return map[role] || 'bg-stone-500';
     };
 

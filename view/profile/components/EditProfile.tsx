@@ -257,7 +257,7 @@ export const EditProfile: React.FC<EditProfileProps> = ({ userData, onSave, addr
                     onChange={(e) => setForm({...form, name: e.target.value})} 
                     icon={<User className="w-4 h-4" />} 
                     placeholder={
-                        form.role === 'receiver' ? "Cth: Panti Asuhan Kasih Ibu" : 
+                        form.role === 'recipient' ? "Cth: Panti Asuhan Kasih Ibu" : 
                         form.role === 'provider' ? "Cth: Toko Roti Berkah" : 
                         "Contoh: Budi Santoso"
                     }

@@ -7,6 +7,7 @@ import { NotificationsPage } from '../common/Notifications';
 import { OnboardingTour } from '../common/OnboardingTour';
 import { ImpactWidget } from './components/Dashboard/ImpactWidget';
 import { NearbyRequests } from './components/Dashboard/NearbyRequests';
+import { CorporateAIWidgets } from './components/CorporateAIWidgets';
 import { db } from '../../services/db';
 
 interface ProviderIndexProps {
@@ -85,7 +86,7 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
   return (
     <>
         {currentUser?.isNewUser && (
-            <OnboardingTour role="provider" onFinish={handleFinishTour} />
+            <OnboardingTour role={currentUser.role as any} onFinish={handleFinishTour} />
         )}
         
         <div className="p-6 md:p-8 max-w-5xl mx-auto pb-32">
@@ -113,6 +114,10 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
             <div className="mt-10">
                 <NearbyRequests />
             </div>
+
+            {currentUser?.role === 'corporate_donor' && (
+                <CorporateAIWidgets currentUser={currentUser} foodItems={foodItems} />
+            )}
         </div>
     </>
   );

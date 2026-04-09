@@ -502,7 +502,7 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
                 />
 
                 <div className="space-y-3">
-                {role === 'receiver' && (
+                {role === 'recipient' && (
                     <>
                         <h3 className="text-sm font-semibold text-stone-500 uppercase tracking-wider mb-2 ml-2">Aktivitas</h3>
                         <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden shadow-sm">

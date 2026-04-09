@@ -48,7 +48,7 @@ export const ComposeMessage: React.FC<ComposeMessageProps> = ({ formData, setFor
                             { value: 'all', label: 'Semua', icon: '👥' },
                             { value: 'provider', label: 'Donatur', icon: '🏪' },
                             { value: 'volunteer', label: 'Relawan', icon: '🚴' },
-                            { value: 'receiver', label: 'Penerima', icon: '👤' },
+                            { value: 'recipient', label: 'Penerima', icon: '👤' },
                             { value: 'admin', label: 'Admin', icon: '🛡️' }
                         ].map(opt => (
                             <button

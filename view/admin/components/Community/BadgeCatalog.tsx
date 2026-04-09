@@ -62,9 +62,9 @@ export const BadgeCatalog: React.FC = () => {
                                     <div className="absolute inset-0 bg-gradient-to-br from-stone-800 to-stone-900"></div>
                                 )}
                                 <div className="absolute top-2.5 left-2.5">
-                                    <span className={`text-[7px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest shadow-lg backdrop-blur-md border border-white/10 ${badge.role === 'provider' ? 'bg-blue-600 text-white' :
+                                    <span className={`text-[7px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest shadow-lg backdrop-blur-md border border-white/10 ${(badge.role === 'individual_donor' || badge.role === 'corporate_donor' || badge.role === 'provider') ? 'bg-blue-600 text-white' :
                                             badge.role === 'volunteer' ? 'bg-green-600 text-white' :
-                                                badge.role === 'receiver' ? 'bg-amber-500 text-white' : 'bg-stone-600 text-white'
+                                                (badge.role === 'recipient' || badge.role === 'receiver') ? 'bg-amber-500 text-white' : 'bg-stone-600 text-white'
                                         }`}>
                                         {badge.role}
                                     </span>

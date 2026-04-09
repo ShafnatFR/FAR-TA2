@@ -1,7 +1,7 @@
 
 import { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
 
-export type UserRole = 'provider' | 'receiver' | 'volunteer' | 'admin_manager' | 'super_admin' | null;
+export type UserRole = 'individual_donor' | 'corporate_donor' | 'recipient' | 'volunteer' | 'admin' | 'super_admin' | null;
 
 export interface UserData {
   id: string;
@@ -130,7 +130,7 @@ export interface BroadcastMessage {
   id: string;
   title: string;
   content: string;
-  target: 'all' | 'provider' | 'volunteer' | 'receiver';
+  target: 'all' | 'provider' | 'volunteer' | 'recipient';
   type?: 'info' | 'success' | 'warning';
   status: 'sent' | 'draft';
   sentAt: string;
@@ -178,7 +178,7 @@ export interface SocialSystemConfig {
 export interface Badge {
   id: string;
   name: string;
-  role: 'all' | 'provider' | 'volunteer' | 'receiver';
+  role: 'all' | 'provider' | 'volunteer' | 'recipient';
   minPoints: number;
   icon: string | ReactNode;
   description: string;
@@ -277,7 +277,7 @@ export interface AdminUser {
     id: string;
     name: string;
     email: string;
-    role: 'super_admin' | 'admin_manager';
+    role: 'super_admin' | 'admin';
     permissions: string[];
     status: 'active' | 'suspended';
     lastLogin: string;

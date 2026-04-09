@@ -23,6 +23,9 @@ export const LOGIN_QUOTES: Quote[] = [
 // Gambar Flat Lay Makanan dengan tone gelap/warm yang elegan
 export const BACKGROUND_IMAGE = "https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?q=80&w=1080&auto=format&fit=crop";
 
+export const QR_HANDOVER_POINTS = 50;
+export const REVIEW_POINTS = 10;
+
 export const SOCIAL_SYSTEM: { [key: string]: SocialSystemConfig } = {
   provider: {
     tiers: [
@@ -77,8 +80,8 @@ export const ACHIEVEMENT_BADGES: Badge[] = [
   { id: '202', name: 'Long Haul', role: 'volunteer', minPoints: 1500, icon: '🚛', description: 'Total jarak tempuh lebih dari 500km.', image: 'https://images.unsplash.com/photo-1505576399279-565b52d4ac71?auto=format&fit=crop&q=80&w=600' },
   
   // Receiver Badges
-  { id: '301', name: 'Verified Account', role: 'receiver', minPoints: 100, icon: '🛡️', description: 'Data diri lengkap dan terverifikasi.', image: 'https://images.unsplash.com/photo-1614036634955-ae5e90f9b9eb?auto=format&fit=crop&q=80&w=600' },
-  { id: '302', name: 'Food Saver', role: 'receiver', minPoints: 300, icon: '🍱', description: 'Konsisten mengklaim dan mengulas makanan.', image: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&q=80&w=600' },
+  { id: '301', name: 'Verified Account', role: 'recipient', minPoints: 100, icon: '🛡️', description: 'Data diri lengkap dan terverifikasi.', image: 'https://images.unsplash.com/photo-1614036634955-ae5e90f9b9eb?auto=format&fit=crop&q=80&w=600' },
+  { id: '302', name: 'Food Saver', role: 'recipient', minPoints: 300, icon: '🍱', description: 'Konsisten mengklaim dan mengulas makanan.', image: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&q=80&w=600' },
   
   // All
   { id: '401', name: 'Early Adopter', role: 'all', minPoints: 50, icon: '🚀', description: 'Bergabung di fase beta aplikasi.', image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=600' },

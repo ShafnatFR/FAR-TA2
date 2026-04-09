@@ -121,7 +121,7 @@ const App: React.FC = () => {
                             const users = await db.getUsers();
                             setGlobalUsers(users);
                         }
-                        if (role === 'admin_manager' || role === 'super_admin') {
+                        if (role === 'admin' || role === 'super_admin') {
                             const users = await db.getUsers();
                             setGlobalUsers(users);
                         }
@@ -135,10 +135,10 @@ const App: React.FC = () => {
 
         setIsGlobalLoading(true);
         try {
-            const providerIdFilter = role === 'provider' ? currentUser.id : undefined;
-            const claimsFilters = role === 'provider' 
+            const providerIdFilter = (role === 'individual_donor' || role === 'corporate_donor') ? currentUser.id : undefined;
+            const claimsFilters = (role === 'individual_donor' || role === 'corporate_donor') 
                 ? { providerId: currentUser.id } 
-                : (role === 'receiver' ? { receiverId: currentUser.id } : {});
+                : (role === 'recipient' ? { receiverId: currentUser.id } : {});
 
             console.log("Fetching Data with Filters:", { providerIdFilter, claimsFilters });
 
@@ -154,7 +154,7 @@ const App: React.FC = () => {
             if (faqData) setGlobalFAQs(faqData);
             
             let finalClaims = claimsData || [];
-            if (role === 'receiver' && claimsData) {
+            if (role === 'recipient' && claimsData) {
                 finalClaims = claimsData.filter(c => c.receiverId === currentUser.id);
             }
             setClaimHistory(finalClaims);
@@ -172,7 +172,7 @@ const App: React.FC = () => {
                 setAllAddresses(allAddrs);
             } 
 
-            if (role === 'admin_manager' || role === 'super_admin' || role === 'volunteer') {
+            if (role === 'admin' || role === 'super_admin' || role === 'volunteer') {
                 const users = await db.getUsers();
                 setGlobalUsers(users);
             }
@@ -192,7 +192,7 @@ const App: React.FC = () => {
     const completedHistory = claimHistory.filter(c => c.status === 'completed');
     const activeHistory = claimHistory.filter(c => c.status === 'active');
 
-    if (role === 'provider') {
+    if (role === 'individual_donor' || role === 'corporate_donor') {
         const ratingSum = completedHistory.reduce((acc, curr) => acc + (curr.rating || 0), 0);
         const avgRating = completedHistory.length ? (ratingSum / completedHistory.length).toFixed(1) : '5.0';
         
@@ -244,9 +244,9 @@ const App: React.FC = () => {
       
       let finalName = data.name;
       if (!finalName) {
-          finalName = data.role === 'provider' ? 'Restoran Berkah' : 
+          finalName = (data.role === 'individual_donor' || data.role === 'corporate_donor') ? 'Restoran Berkah' : 
                       data.role === 'volunteer' ? 'Budi Santoso' : 
-                      data.role === 'admin_manager' ? 'Admin Manager' : 
+                      (data.role === 'admin' || data.role === 'super_admin') ? 'Admin Manager' : 
                       'Siti Aminah';
       }
 
@@ -254,7 +254,7 @@ const App: React.FC = () => {
           id: data.id || '1',
           name: finalName,
           email: data.email || 'user@foodairescue.com',
-          role: data.role || 'receiver',
+          role: data.role || 'recipient',
           status: (data.status as any) || 'active',
           points: data.points !== undefined ? data.points : 0, 
           joinDate: data.joinDate || '2025-01-01',
@@ -506,7 +506,7 @@ const App: React.FC = () => {
       if (currentView === 'forgot-password') return <ForgotPasswordView onNavigate={setCurrentView as any} />;
       
       // CHECK ACCOUNT STATUS HERE
-      if (currentUser && role !== 'admin_manager' && role !== 'super_admin') {
+      if (currentUser && role !== 'admin' && role !== 'super_admin') {
           if (currentUser.status?.toUpperCase() === 'SUSPENDED') {
               return <VerificationRejectedModal onLogout={handleLogout} userName={currentUser.name} />;
           }
@@ -515,7 +515,7 @@ const App: React.FC = () => {
           }
       }
 
-      if (isGlobalLoading && !foodItems.length && role !== 'receiver' && role !== 'volunteer') {
+      if (isGlobalLoading && !foodItems.length && role !== 'recipient' && role !== 'volunteer') {
           return (
               <div className="flex flex-col items-center justify-center min-h-[80vh]">
                   <Loader2 className="w-12 h-12 text-orange-500 animate-spin mb-4" />
@@ -561,7 +561,7 @@ const App: React.FC = () => {
           />
       );
 
-      if (role === 'provider') {
+      if (role === 'individual_donor' || role === 'corporate_donor') {
           if (currentView === 'inventory') return (
             <InventoryManager 
                 foodItems={foodItems} 
@@ -631,7 +631,7 @@ const App: React.FC = () => {
           );
       }
 
-      if (role === 'receiver') {
+      if (role === 'recipient') {
           // Filter out expired items for receivers, unless disabled by admin
           const activeFoodItems = appSettings.disableExpiryLogic 
               ? foodItems 
@@ -679,7 +679,7 @@ const App: React.FC = () => {
           );
       }
 
-      if (role === 'admin_manager' || role === 'super_admin') {
+      if (role === 'admin' || role === 'super_admin') {
           return (
             <AdminIndex 
                 role={role} 
@@ -722,7 +722,7 @@ const App: React.FC = () => {
                   <span className="text-[10px] font-black uppercase tracking-widest">Home</span>
               </button>
               
-              {role === 'provider' && (
+              {(role === 'individual_donor' || role === 'corporate_donor') && (
                   <button 
                     onClick={() => { setHistoryFilter(null); setCurrentView('inventory'); }} 
                     className={`flex flex-col items-center gap-1.5 transition-all active:scale-90 ${currentView === 'inventory' ? 'text-orange-600' : 'text-stone-400'}`}
@@ -732,7 +732,7 @@ const App: React.FC = () => {
                   </button>
               )}
 
-              {role === 'receiver' && (
+              {role === 'recipient' && (
                   <button 
                     onClick={() => { setProfileInitialTab('history'); setCurrentView('profile'); }} 
                     className={`flex flex-col items-center gap-1.5 transition-all active:scale-90 ${currentView === 'profile' && profileInitialTab === 'history' ? 'text-orange-600' : 'text-stone-400'}`}

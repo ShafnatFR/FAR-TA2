@@ -6,12 +6,14 @@ import { Button } from '../components/Button';
 interface SuccessVerificationSplashProps {
     receiverName: string;
     foodName: string;
+    points?: number;
     onClose: () => void;
 }
 
 export const SuccessVerificationSplash: React.FC<SuccessVerificationSplashProps> = ({ 
     receiverName, 
     foodName, 
+    points = 50,
     onClose
 }) => {
     return (
@@ -30,9 +32,21 @@ export const SuccessVerificationSplash: React.FC<SuccessVerificationSplashProps>
                     <h2 className="text-3xl font-black text-stone-900 dark:text-white uppercase italic tracking-tighter mb-2">
                         Pesanan Selesai!
                     </h2>
-                    <p className="text-stone-500 text-xs font-bold uppercase tracking-widest mb-8">
+                    <p className="text-stone-500 text-xs font-bold uppercase tracking-widest mb-4">
                         Donasi berhasil diserahkan
                     </p>
+
+                    {/* Point Bonus Card */}
+                    <div className="bg-gradient-to-br from-orange-500 to-orange-600 w-full mb-8 p-6 rounded-[2rem] shadow-lg shadow-orange-500/30 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-20 group-hover:scale-125 transition-transform duration-700">
+                             <CheckCircle2 className="w-20 h-20 text-white" />
+                        </div>
+                        <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Poin Sosial Didapat</p>
+                        <div className="flex items-center justify-center gap-2">
+                            <span className="text-4xl font-black text-white italic">+{points}</span>
+                            <span className="bg-white/20 text-[10px] font-black py-1 px-3 rounded-full text-white uppercase tracking-widest">Points</span>
+                        </div>
+                    </div>
 
                     <div className="w-full bg-stone-50 dark:bg-stone-800/50 p-5 rounded-3xl border border-stone-200 dark:border-stone-800 mb-8 space-y-4 text-left">
                         <div className="flex items-start gap-3">

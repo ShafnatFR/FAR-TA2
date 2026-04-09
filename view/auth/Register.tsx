@@ -13,7 +13,7 @@ interface RegisterViewProps {
 
 export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegister }) => {
   const [step, setStep] = useState<'role' | 'form'>('role');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('receiver');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('recipient');
   const [showPass, setShowPass] = useState({ pass: false, confirm: false });
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
@@ -178,8 +178,9 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
 
                     <div className="grid grid-cols-1 gap-4">
                         {[
-                            { id: 'provider', label: 'Donatur', icon: Utensils, desc: 'Berikan surplus makanan Anda kepada yang membutuhkan.' },
-                            { id: 'receiver', label: 'Penerima', icon: UserCircle, desc: 'Dapatkan akses ke makanan layak konsumsi di sekitar Anda.' },
+                            { id: 'individual_donor', label: 'Donatur Individu', icon: User, desc: 'Donasikan surplus makanan pribadi Anda.' },
+                            { id: 'corporate_donor', label: 'Donatur Korporat', icon: Utensils, desc: 'Solusi CSR & Pengelolaan Surplus Pangan Bisnis Anda.' },
+                            { id: 'recipient', label: 'Penerima', icon: UserCircle, desc: 'Dapatkan akses ke makanan layak konsumsi di sekitar Anda.' },
                             { id: 'volunteer', label: 'Relawan', icon: Truck, desc: 'Bantu mendistribusikan makanan dari donatur ke penerima.' }
                         ].map((role) => (
                             <button 
@@ -211,7 +212,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
                     <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
                             <h2 className="text-3xl lg:text-4xl font-black text-stone-900 mb-1 tracking-tighter leading-none">Register</h2>
-                            <p className="text-stone-500 text-sm font-medium">Lengkapi data diri sebagai <span className="text-orange-600 font-bold uppercase">{selectedRole === 'provider' ? 'Donatur' : selectedRole === 'receiver' ? 'Penerima' : 'Relawan'}</span></p>
+                            <p className="text-stone-500 text-sm font-medium">Lengkapi data diri sebagai <span className="text-orange-600 font-bold uppercase">{selectedRole === 'individual_donor' ? 'Donatur Individu' : selectedRole === 'corporate_donor' ? 'Donatur Korporat' : selectedRole === 'recipient' ? 'Penerima' : 'Relawan'}</span></p>
                         </div>
                         <button 
                             onClick={() => setStep('role')}
@@ -233,8 +234,8 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
                             label="Nama Lengkap" 
                             icon={<User className="w-5 h-5 group-focus-within:text-orange-600 transition-colors" />}
                             placeholder={
-                                selectedRole === 'receiver' ? "Cth: Panti Asuhan Kasih Ibu" : 
-                                selectedRole === 'provider' ? "Cth: Toko Roti Berkah" : 
+                                selectedRole === 'recipient' ? "Cth: Panti Asuhan Kasih Ibu" : 
+                                (selectedRole === 'individual_donor' || selectedRole === 'corporate_donor') ? "Cth: Toko Roti Berkah / Budi Santoso" : 
                                 "Contoh: Budi Santoso"
                             } 
                             value={formData.name} 

@@ -15,13 +15,14 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({ user, onCl
     const handleWhatsAppChat = () => {
         let message = '';
         switch(user.role) {
-            case 'provider':
+            case 'individual_donor':
+            case 'corporate_donor':
                 message = `Halo ${user.name}, saya Admin dari Food AI Rescue. Saya ingin memverifikasi data usaha Anda untuk aktivasi akun Donatur. Apakah ada waktu untuk diskusi sebentar?`;
                 break;
             case 'volunteer':
                 message = `Halo ${user.name}, terima kasih telah mendaftar sebagai Relawan di Food AI Rescue. Saya ingin mengonfirmasi area jangkauan dan ketersediaan Anda sebelum mengaktifkan akun.`;
                 break;
-            case 'receiver':
+            case 'recipient':
                 message = `Halo ${user.name}, kami telah menerima pendaftaran Anda sebagai Penerima Manfaat di Food AI Rescue. Kami perlu memverifikasi identitas Anda untuk keamanan komunitas.`;
                 break;
             default:
@@ -85,7 +86,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({ user, onCl
                 <div className="p-6 overflow-y-auto space-y-6 flex-1">
                     <div className="flex items-center gap-4">
                         <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-lg ${
-                            user.role === 'provider' ? 'bg-orange-600' : user.role === 'volunteer' ? 'bg-orange-500' : 'bg-orange-400'
+                            (user.role === 'individual_donor' || user.role === 'corporate_donor') ? 'bg-orange-600' : user.role === 'volunteer' ? 'bg-orange-500' : 'bg-orange-400'
                         }`}>
                             {user.name.charAt(0)}
                         </div>

@@ -30,14 +30,14 @@ export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, 
     // Calculate points logic (FIXED: Added ID filtering)
     const calculatePoints = (user: UserData): number => {
         let points = user.points || 0;
-        if (user.role === 'provider') {
+        if (user.role === 'individual_donor' || user.role === 'corporate_donor') {
             const completedOrders = claims.filter(c => (c.providerId === user.id || c.providerName === user.name) && c.status === 'completed').length;
             const activeStock = inventory.filter(i => i.providerId === user.id || i.providerName === user.name).length;
             points += (completedOrders * 50) + (activeStock * 10);
         } else if (user.role === 'volunteer') {
             const missions = claims.filter(c => (c.volunteerId === user.id || c.courierName === user.name) && c.status === 'completed').length;
             points += (missions * 150);
-        } else if (user.role === 'receiver') {
+        } else if (user.role === 'recipient') {
             // FIX: Ensure we only count claims belonging to THIS user
             const myClaims = claims.filter(c => c.receiverId === user.id && c.status === 'completed').length;
             points += (myClaims * 10);
@@ -180,9 +180,12 @@ export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, 
                         className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 px-3 py-2 rounded-xl text-[10px] font-bold text-stone-700 dark:text-stone-300 focus:outline-none focus:border-orange-500 appearance-none shadow-sm min-w-[110px]"
                     >
                         <option value="all">Semua Peran</option>
-                        <option value="provider">Provider</option>
-                        <option value="volunteer">Volunteer</option>
-                        <option value="receiver">Receiver</option>
+                        <option value="individual_donor">Donatur Individu</option>
+                        <option value="corporate_donor">Donatur Korporat</option>
+                        <option value="recipient">Penerima</option>
+                        <option value="volunteer">Relawan</option>
+                        <option value="admin">Admin</option>
+                        <option value="super_admin">Super Admin</option>
                     </select>
                     <select
                         value={statusFilter}
@@ -229,7 +232,7 @@ export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, 
                                     >
                                         <td className="px-3 py-3">
                                             <div className="flex items-center gap-2.5">
-                                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white font-black shadow-sm shrink-0 text-[10px] ${user.role === 'provider' ? 'bg-orange-600' : user.role === 'volunteer' ? 'bg-orange-500' : 'bg-orange-400'
+                                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white font-black shadow-sm shrink-0 text-[10px] ${(user.role === 'individual_donor' || user.role === 'corporate_donor') ? 'bg-orange-600' : user.role === 'volunteer' ? 'bg-orange-500' : 'bg-orange-400'
                                                     }`}>
                                                     {user.name.charAt(0)}
                                                 </div>

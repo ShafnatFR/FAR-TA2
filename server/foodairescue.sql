@@ -65,7 +65,7 @@ CREATE TABLE `ai_verifications` (
 CREATE TABLE `badges` (
   `id` int(11) NOT NULL,
   `name` varchar(255) NOT NULL,
-  `role` enum('DONATUR','PENERIMA','RELAWAN','ADMIN','SUPER_ADMIN') DEFAULT NULL,
+  `role` enum('INDIVIDUAL_DONOR','CORPORATE_DONOR','RECEIVER','VOLUNTEER','ADMIN','SUPER_ADMIN') DEFAULT NULL,
   `min_points` int(11) DEFAULT 0,
   `icon` varchar(255) DEFAULT NULL,
   `description` text DEFAULT NULL,
@@ -228,7 +228,7 @@ CREATE TABLE `users` (
   `email` varchar(255) NOT NULL,
   `password` varchar(255) NOT NULL,
   `phone` varchar(255) DEFAULT NULL,
-  `role` enum('DONATUR','PENERIMA','RELAWAN','ADMIN','SUPER_ADMIN') NOT NULL,
+  `role` enum('INDIVIDUAL_DONOR','CORPORATE_DONOR','RECEIVER','VOLUNTEER','ADMIN','SUPER_ADMIN') NOT NULL,
   `status` enum('ACTIVE','INACTIVE','SUSPENDED') DEFAULT 'ACTIVE',
   `points` int(11) DEFAULT 0,
   `avatar` varchar(255) DEFAULT NULL,

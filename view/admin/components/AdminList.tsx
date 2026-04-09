@@ -18,7 +18,7 @@ export const AdminList: React.FC<AdminListProps> = ({ currentUser, onMenuRefresh
   const [isSaving, setIsSaving] = useState(false);
 
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
-  const [newAdminForm, setNewAdminForm] = useState({ id: '', name: '', email: '', password: '', role: 'admin_manager', permissions: [] as string[], status: 'active' });
+  const [newAdminForm, setNewAdminForm] = useState({ id: '', name: '', email: '', password: '', role: 'admin', permissions: [] as string[], status: 'active' });
   const [isEditingAdmin, setIsEditingAdmin] = useState(false);
 
   // Pagination for logs
@@ -71,7 +71,7 @@ export const AdminList: React.FC<AdminListProps> = ({ currentUser, onMenuRefresh
           await fetchLogs();
           if (onMenuRefresh) onMenuRefresh();
           setShowAddAdminModal(false);
-          setNewAdminForm({ id: '', name: '', email: '', password: '', role: 'admin_manager', permissions: [], status: 'active' });
+          setNewAdminForm({ id: '', name: '', email: '', password: '', role: 'admin', permissions: [], status: 'active' });
           setIsEditingAdmin(false);
           alert(isEditingAdmin ? "Data admin diperbarui!" : "Admin baru berhasil ditambahkan!");
       } catch (err: any) {
@@ -144,7 +144,7 @@ export const AdminList: React.FC<AdminListProps> = ({ currentUser, onMenuRefresh
              </div>
              <div className="flex gap-2">
                  <Button variant="outline" className="text-[10px] font-black uppercase tracking-widest h-10 px-6 rounded-xl border-2" onClick={handleExportLogs}>Download Logs</Button>
-                 <Button className="text-[10px] font-black uppercase tracking-widest h-10 px-6 rounded-xl shadow-lg shadow-orange-500/20" onClick={() => { setIsEditingAdmin(false); setNewAdminForm({ id: '', name: '', email: '', password: '', role: 'admin_manager', permissions: [], status: 'active' }); setShowAddAdminModal(true); }}><UserPlus className="w-4 h-4 mr-2" /> Add Admin</Button>
+                 <Button className="text-[10px] font-black uppercase tracking-widest h-10 px-6 rounded-xl shadow-lg shadow-orange-500/20" onClick={() => { setIsEditingAdmin(false); setNewAdminForm({ id: '', name: '', email: '', password: '', role: 'admin', permissions: [], status: 'active' }); setShowAddAdminModal(true); }}><UserPlus className="w-4 h-4 mr-2" /> Add Admin</Button>
              </div>
         </div>
 
@@ -267,7 +267,7 @@ export const AdminList: React.FC<AdminListProps> = ({ currentUser, onMenuRefresh
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-stone-500 uppercase tracking-widest">Level Access</label>
                                 <select className="w-full p-4 bg-stone-50 dark:bg-stone-800 border-none rounded-2xl text-sm font-bold text-stone-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/20" value={newAdminForm.role} onChange={e => setNewAdminForm({...newAdminForm, role: e.target.value})}>
-                                    <option value="admin_manager">Administrator</option>
+                                    <option value="admin">Administrator</option>
                                     <option value="super_admin">Super Commander</option>
                                 </select>
                             </div>

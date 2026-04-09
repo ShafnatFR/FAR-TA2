@@ -49,7 +49,7 @@ export const MissionDetail: React.FC<MissionDetailProps> = ({ task, onBack, onAc
         window.open(url, '_blank');
     };
 
-    const handleContact = (phone: string | number | undefined, role: 'donor' | 'receiver') => {
+    const handleContact = (phone: string | number | undefined, role: 'donor' | 'recipient') => {
         if (!phone || String(phone).length < 5) {
             alert(`Nomor telepon ${role === 'donor' ? 'Donatur' : 'Penerima'} tidak tersedia atau belum diisi.`);
             return;
@@ -273,7 +273,7 @@ export const MissionDetail: React.FC<MissionDetailProps> = ({ task, onBack, onAc
                         </Button>
                         <Button 
                             variant="outline" 
-                            onClick={() => handleContact(task.receiverPhone, 'receiver')}
+                            onClick={() => handleContact(task.receiverPhone, 'recipient')}
                             className="h-12 rounded-xl text-[10px] font-black uppercase tracking-widest border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300"
                         >
                             <MessageCircle className="w-4 h-4 mr-2 text-green-600" /> Chat Penerima

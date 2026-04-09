@@ -276,7 +276,7 @@ export const AddressList: React.FC<AddressListProps> = ({ addresses, onAddAddres
                                 className="w-full bg-white dark:bg-[#1C1917] border-b-2 border-stone-200 dark:border-stone-800 text-stone-900 dark:text-white px-0 py-2 focus:outline-none focus:border-green-600 placeholder-stone-400 dark:placeholder-stone-600 transition-all text-base font-bold" 
                                 value={formData.label} 
                                 onChange={e => setFormData({...formData, label: e.target.value})}
-                                placeholder={role === 'receiver' ? "Cth: Panti Asuhan Kasih Ibu" : "Cth: Toko Roti Berkah"} 
+                                placeholder={role === 'recipient' ? "Cth: Panti Asuhan Kasih Ibu" : "Cth: Toko Roti Berkah"} 
                             />
                         </div>
 

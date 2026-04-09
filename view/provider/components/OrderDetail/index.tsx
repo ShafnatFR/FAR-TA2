@@ -25,7 +25,7 @@ interface OrderDetailProps {
 export const OrderDetail: React.FC<OrderDetailProps> = ({ order, onBack, onComplete }) => {
     const [isVerifying, setIsVerifying] = useState(false);
     const [showVerifyModal, setShowVerifyModal] = useState(false);
-    const [verificationResult, setVerificationResult] = useState<{ status: 'success' | 'error' | 'already_taken' | 'idle', message: string, code?: string }>({ status: 'idle', message: '' });
+    const [verificationResult, setVerificationResult] = useState<{ status: 'success' | 'error' | 'already_taken' | 'idle', message: string, code?: string, pointsEarned?: number }>({ status: 'idle', message: '' });
     
     const [isScanSuccess, setIsScanSuccess] = useState(order.isScanned || false);
     
@@ -56,7 +56,8 @@ export const OrderDetail: React.FC<OrderDetailProps> = ({ order, onBack, onCompl
                 setVerificationResult({ 
                     status: 'success', 
                     message: `VERIFIKASI SUKSES! ${result.foodName || 'Makanan'} DITERIMA.`, 
-                    code 
+                    code,
+                    pointsEarned: result.pointsEarned 
                 });
                 
                 if (navigator.vibrate) navigator.vibrate(200);
@@ -221,6 +222,7 @@ export const OrderDetail: React.FC<OrderDetailProps> = ({ order, onBack, onCompl
                 <SuccessVerificationSplash 
                     receiverName={order.receiver.name}
                     foodName={order.foodName}
+                    points={verificationResult.pointsEarned}
                     onClose={handleCloseSplash}
                 />
             )}
