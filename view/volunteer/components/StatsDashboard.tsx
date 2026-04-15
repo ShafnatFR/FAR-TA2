@@ -19,6 +19,7 @@ interface StatsDashboardProps {
     ranks: RankLevel[];
     quests: DailyQuest[];
     isLoading?: boolean;
+    socialSystem?: any;
 }
 
 const ActivityChart = ({ data }: { data: number[] }) => {
@@ -42,13 +43,13 @@ const ActivityChart = ({ data }: { data: number[] }) => {
   );
 };
 
-export const StatsDashboard: React.FC<StatsDashboardProps> = ({ stats, quests, isLoading }) => {
+export const StatsDashboard: React.FC<StatsDashboardProps> = ({ stats, quests, isLoading, socialSystem }) => {
   const [showRankDetails, setShowRankDetails] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
 
-  const volunteerSystem = SOCIAL_SYSTEM.volunteer;
-  const currentRankObj = volunteerSystem.tiers.slice().reverse().find(t => stats.points >= t.minPoints) || volunteerSystem.tiers[0];
-  const nextRankObj = volunteerSystem.tiers.find(t => t.minPoints > stats.points);
+  const volunteerSystem = socialSystem?.volunteer || SOCIAL_SYSTEM.volunteer;
+  const currentRankObj = volunteerSystem.tiers.slice().reverse().find((t: any) => stats.points >= t.minPoints) || volunteerSystem.tiers[0];
+  const nextRankObj = volunteerSystem.tiers.find((t: any) => t.minPoints > stats.points);
   const progressToNext = nextRankObj 
     ? Math.min(((stats.points - currentRankObj.minPoints) / (nextRankObj.minPoints - currentRankObj.minPoints)) * 100, 100)
     : 100;
@@ -235,7 +236,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({ stats, quests, i
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {volunteerSystem.tiers.map((rank) => {
+                {(volunteerSystem.tiers || []).map((rank: any) => {
                     const isCurrent = rank.name === currentRankObj.name;
                     const isPassed = stats.points >= rank.minPoints;
                     

@@ -45,7 +45,10 @@ export const BadgeModal: React.FC<BadgeModalProps> = ({ badge, onClose, onSave, 
                         <div className="space-y-1">
                             <label className="text-[9px] font-black text-stone-400 uppercase tracking-widest ml-1">TARGET ROLE</label>
                             <select value={formData.role || 'all'} onChange={e => setFormData({ ...formData, role: e.target.value as any })} className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white font-bold text-[11px] focus:outline-none appearance-none transition-all shadow-sm">
-                                <option value="all">Semua</option><option value="provider">Provider</option><option value="volunteer">Volunteer</option><option value="receiver">Receiver</option>
+                                <option value="all">Semua</option>
+                                <option value="provider">Provider/Donatur</option>
+                                <option value="volunteer">Volunteer/Relawan</option>
+                                <option value="receiver">Receiver/Penerima</option>
                             </select>
                         </div>
                         <div className="space-y-1">

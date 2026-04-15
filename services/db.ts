@@ -58,6 +58,7 @@ export const db = {
   registerUser: (userData: any) => sendRequest<UserData>('REGISTER_USER', userData),
   loginUser: (credentials: any) => sendRequest<UserData>('LOGIN_USER', credentials), 
   getUsers: () => sendRequest<UserData[]>('GET_USERS'),
+  getUser: (id: string) => sendRequest<UserData>('GET_USER', { id }),
   upsertUser: (user: UserData) => sendRequest<UserData>('UPSERT_USER', user),
 
   // --- ADDRESSES ---
@@ -116,6 +117,8 @@ export const db = {
   getPointHistory: (userId: string) => sendRequest<any[]>('GET_POINT_HISTORY', { userId }),
   getBadges: (role?: string) => sendRequest<any[]>('GET_BADGES', { role }),
   updateSelectedBadge: (userId: string, badgeId: string) => sendRequest<any>('UPDATE_SELECTED_BADGE', { userId, badgeId }),
+  upsertBadge: (badge: Badge, actor: any) => sendRequest<any>('UPSERT_BADGE', { badge, actor }),
+  deleteBadge: (id: string, actor: any) => sendRequest<any>('DELETE_BADGE', { id, actor }),
   getAdminDashboard: () => sendRequest<any>('GET_ADMIN_DASHBOARD'),
   getAdminImpact: (period: string) => sendRequest<any>('GET_ADMIN_IMPACT', { period }),
   getAdminTargets: () => sendRequest<any[]>('GET_ADMIN_TARGETS'),
@@ -128,6 +131,10 @@ export const db = {
   upsertAdmin: (admin: any, actor: any) => sendRequest<any>('UPSERT_ADMIN', { admin, actor }),
   deleteAdmin: (id: string, actor: any) => sendRequest<any>('DELETE_ADMIN', { id, actor }),
   
+  getRankLevels: () => sendRequest<any[]>('GET_RANK_LEVELS'),
+  upsertRankLevel: (level: any, actor: any) => sendRequest<any>('UPSERT_RANK_LEVEL', { level, actor }),
+  deleteRankLevel: (id: string, actor: any) => sendRequest<any>('DELETE_RANK_LEVEL', { id, actor }),
+
   // --- CORPORATE AI ---
   callCorporateAI: (type: string, role: string, payload: any, actorId?: string) => 
     sendRequest<any>('CORPORATE_AI', { type, role, payload, actorId }),

@@ -44,7 +44,10 @@ export const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) =
                         <div className="space-y-1.5">
                             <label className="text-[9px] font-black text-stone-400 uppercase tracking-widest ml-1">PERAN</label>
                             <select value={formData.role || 'volunteer'} onChange={e => setFormData({ ...formData, role: e.target.value as any })} className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white font-bold text-[11px] focus:outline-none appearance-none shadow-sm transition-all">
-                                <option value="provider">Provider</option><option value="volunteer">Volunteer</option><option value="receiver">Receiver</option>
+                                <option value="individual_donor">Donatur Individu</option>
+                                <option value="corporate_donor">Donatur Korporat</option>
+                                <option value="volunteer">Relawan</option>
+                                <option value="recipient">Penerima</option>
                             </select>
                         </div>
                         <div className="space-y-1.5">
@@ -54,6 +57,7 @@ export const UserModal: React.FC<UserModalProps> = ({ user, onClose, onSave }) =
                             </select>
                         </div>
                     </div>
+                    <Input label="POIN / RANK EXP" type="number" value={formData.points?.toString() || '0'} onChange={e => setFormData({ ...formData, points: parseInt(e.target.value) || 0 })} placeholder="0" labelClassName="font-black text-[9px] tracking-widest" />
                     <div className="flex gap-2.5 mt-8">
                         <Button variant="ghost" onClick={onClose} className="h-10 font-black uppercase text-[9px] border border-stone-100 flex-1">BATAL</Button>
                         <Button onClick={handleSave} className="h-10 font-black uppercase text-[9px] shadow-xl shadow-orange-500/30 flex-1">SIMPAN DATA</Button>

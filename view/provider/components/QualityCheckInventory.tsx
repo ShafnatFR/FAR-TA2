@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, ShieldCheck, Zap, CheckCircle2, AlertOctagon, 
-  Clock, List, FileText, ShieldAlert, BookOpen, AlertTriangle, Edit3, Save, X, Plus, Leaf, TrendingUp, Info, ChevronDown, Award, Loader2
+  Clock, List, FileText, ShieldAlert, BookOpen, AlertTriangle, Edit3, Save, X, Plus, Leaf, TrendingUp, Info, ChevronDown, Award, Loader2, RefreshCw
 } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { FoodItem, UserData, Address } from '../../../types';
 import { QualityCheckInventoryInput } from './QualityCheckInventoryInput';
 import { db } from '../../../services/db';
-import { ImpactBreakdownItem } from '../../../services/foodVerification';
+import { ImpactBreakdownItem, foodVerification } from '../../../services/foodVerification';
 
 interface QualityCheckInventoryProps {
   onBack: () => void;
@@ -25,6 +25,7 @@ export const QualityCheckInventory: React.FC<QualityCheckInventoryProps> = ({ on
   const [userAddresses, setUserAddresses] = useState<Address[]>([]);
   
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isReAnalyzing, setIsReAnalyzing] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedReasoning, setEditedReasoning] = useState('');
@@ -152,6 +153,39 @@ export const QualityCheckInventory: React.FC<QualityCheckInventoryProps> = ({ on
       } finally {
           setIsPublishing(false);
       }
+  };
+
+  const handleReAnalyze = async () => {
+    if (!previewImage || !formData || isReAnalyzing) return;
+    
+    setIsReAnalyzing(true);
+    try {
+        const qtyNum = parseFloat(formData.quantity) || 1;
+        const weightNum = parseFloat(formData.weightPerUnit) || 500;
+        const totalWeightGram = formData.quantityUnit === 'Gram' ? qtyNum : qtyNum * weightNum;
+        const portionCount = formData.quantityUnit === 'Gram' ? 1 : qtyNum;
+
+        const result = await foodVerification.analyze(previewImage, {
+            foodName: formData.name,
+            ingredients: formData.ingredients,
+            madeTime: formData.madeDateTime,
+            storageLocation: formData.storageLocation,
+            weightGram: totalWeightGram,
+            packagingType: formData.packaging,
+            distributionStart: formData.distributionStart,
+            quantityCount: portionCount 
+        });
+        
+        setAnalysisResult(result);
+        setEditedReasoning(result.reasoning || '');
+        setEditedIngredients(result.detectedItems || []);
+        alert("Analisis ulang berhasil!");
+    } catch (err) {
+        console.error(err);
+        alert("Gagal menganalisis ulang. Silakan coba lagi.");
+    } finally {
+        setIsReAnalyzing(false);
+    }
   };
 
   return (
@@ -353,12 +387,36 @@ export const QualityCheckInventory: React.FC<QualityCheckInventoryProps> = ({ on
                             </div>
 
                             <div className="space-y-4 pt-6 mt-6 border-t border-white/10">
-                                <h4 className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] flex items-center gap-2"><FileText className="w-3.5 h-3.5" /> DESKRIPSI HASIL ANALISIS</h4>
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-[10px] font-black text-orange-500 uppercase tracking-[0.2em] flex items-center gap-2"><FileText className="w-3.5 h-3.5" /> DESKRIPSI HASIL ANALISIS</h4>
+                                    {analysisResult.reasoning?.includes("Gagal menghubungi AI") && (
+                                        <button 
+                                            onClick={handleReAnalyze}
+                                            disabled={isReAnalyzing}
+                                            className="flex items-center gap-1.5 text-[9px] font-black text-white bg-orange-600 hover:bg-orange-700 px-3 py-1.5 rounded-lg transition-all animate-pulse"
+                                        >
+                                            <RefreshCw className={`w-3 h-3 ${isReAnalyzing ? 'animate-spin' : ''}`} />
+                                            ULANGI ANALISIS AI
+                                        </button>
+                                    )}
+                                </div>
                                 <div className={`bg-white/5 p-6 rounded-2xl border border-white/5 space-y-4 ${isEditing ? 'ring-2 ring-orange-500/50' : ''}`}>
                                     {isEditing ? (
                                         <textarea value={editedReasoning} onChange={(e) => setEditedReasoning(e.target.value)} className="w-full bg-black/20 text-white p-3 rounded-xl border border-white/10 text-sm focus:outline-none focus:border-orange-500" rows={4} />
                                     ) : (
-                                        <p className="text-stone-200 text-sm leading-relaxed font-medium italic">"{editedReasoning || analysisResult.reasoning}"</p>
+                                        <div className="relative group">
+                                            <p className="text-stone-200 text-sm leading-relaxed font-medium italic">"{editedReasoning || analysisResult.reasoning}"</p>
+                                            {!analysisResult.reasoning?.includes("Gagal menghubungi AI") && (
+                                                <button 
+                                                    onClick={handleReAnalyze}
+                                                    disabled={isReAnalyzing}
+                                                    className="absolute -top-1 -right-1 p-1.5 bg-white/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20"
+                                                    title="Refresh Analysis"
+                                                >
+                                                    <RefreshCw className={`w-3 h-3 text-stone-400 ${isReAnalyzing ? 'animate-spin' : ''}`} />
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>

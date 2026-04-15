@@ -16,9 +16,10 @@ interface ProfileHeaderProps {
         label3: string; value3: number;
     };
     onUpdateUser?: (data: UserData) => void;
+    socialSystem?: any;
 }
 
-export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, bannerImage: initialBanner, onEditBanner, onEditAvatar, stats, onUpdateUser }) => {
+export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, bannerImage: initialBanner, onEditBanner, onEditAvatar, stats, onUpdateUser, socialSystem }) => {
     // State management for Cover System
     const [coverMode, setCoverMode] = useState<'image' | 'badge'>(userData.selected_badge_id ? 'badge' : 'image');
     const [customBanner, setCustomBanner] = useState<string | null>(initialBanner);
@@ -55,14 +56,14 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, ba
     // Active Badge from DB data
     const activeBadge = availableBadges.find(b => String(b.id) === String(selectedBadgeId));
 
-    // --- LOGIC BADGE LEVEL ICON ---
-    // Mengambil ikon rank berdasarkan poin user dari SOCIAL_SYSTEM
+    // Mengambil ikon rank berdasarkan poin user dari socialSystem
     const getRankIcon = () => {
-        if (!role || !SOCIAL_SYSTEM[role]) return <User className="w-4 h-4 text-white" />;
+        const sys = socialSystem?.[role] || socialSystem?.provider; // fallback
+        if (!sys) return <User className="w-4 h-4 text-white" />;
         
-        const tiers = SOCIAL_SYSTEM[role].tiers;
+        const tiers = sys.tiers;
         // Find highest tier reached
-        const currentTier = tiers.slice().reverse().find(t => currentUserPoints >= t.minPoints) || tiers[0];
+        const currentTier = tiers.slice().reverse().find((t: any) => currentUserPoints >= t.minPoints) || tiers[0];
         
         return <div className="text-xl">{currentTier.icon}</div>;
     };
@@ -169,9 +170,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ userData, role, ba
 
             <div className="mt-16 text-center px-4">
                 <h1 className="text-xl font-bold text-stone-900 dark:text-white">{userData.name}</h1>
+                {/* 
                 <p className="text-stone-500 dark:text-stone-400 text-sm font-medium">
-                    {role === 'provider' ? 'Donatur Terverifikasi' : role === 'volunteer' ? 'Relawan' : 'Penerima Manfaat'}
-                </p>
+                    {(role === 'individual_donor' || role === 'corporate_donor') ? 'Donatur Terverifikasi' : role === 'volunteer' ? 'Relawan' : 'Penerima Manfaat'}
+                </p> 
+                */}
 
                 <div className="flex justify-center gap-4 mt-2 text-sm text-stone-500 dark:text-stone-400">
                     <div className="flex items-center gap-1"><Mail className="w-3 h-3" /> {userData.email}</div>

@@ -140,7 +140,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onNavigate }) => 
                         placeholder="nama@email.com" 
                         value={email} 
                         onChange={(e) => setEmail(e.target.value)} 
-                        className={`!bg-stone-50 !border-stone-200 !text-stone-900 placeholder:!text-black focus:!border-orange-500 focus:!bg-white focus:ring-4 focus:ring-orange-500/10 rounded-2xl py-4 transition-all h-14 font-medium ${errors.email ? '!border-red-300 focus:!border-red-500' : ''}`} 
+                        className={`!bg-stone-50 !border-stone-200 !text-stone-900 focus:!border-orange-500 focus:!bg-white focus:ring-4 focus:ring-orange-500/10 rounded-2xl py-4 transition-all h-14 font-medium ${errors.email ? '!border-red-300 focus:!border-red-500' : ''}`} 
                         containerClassName="space-y-0"
                     />
                     {errors.email && <p className="text-red-500 text-[10px] font-bold ml-2">{errors.email}</p>}
@@ -159,7 +159,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, onNavigate }) => 
                             placeholder="••••••••" 
                             value={password} 
                             onChange={(e) => setPassword(e.target.value)} 
-                            className={`!bg-stone-50 !border-stone-200 !text-stone-900 placeholder:!text-black focus:!border-orange-500 focus:!bg-white focus:ring-4 focus:ring-orange-500/10 rounded-2xl py-4 pr-12 transition-all h-14 font-medium ${errors.password ? '!border-red-300 focus:!border-red-500' : ''}`} 
+                            className={`!bg-stone-50 !border-stone-200 !text-stone-900 focus:!border-orange-500 focus:!bg-white focus:ring-4 focus:ring-orange-500/10 rounded-2xl py-4 pr-12 transition-all h-14 font-medium ${errors.password ? '!border-red-300 focus:!border-red-500' : ''}`} 
                             containerClassName="space-y-0"
                             rightElement={
                                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-stone-300 hover:text-orange-500 transition-colors">

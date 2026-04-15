@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { 
   LayoutDashboard, Users, Shield, Truck, BarChart3, Megaphone, 
-  FileText, Settings, UserCog, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen
+  FileText, Settings, UserCog, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen, Award
 } from 'lucide-react';
 import { UserRole, UserData, FoodItem, ClaimHistoryItem, FAQItem, BroadcastMessage, Address } from '../../types';
 import { Overview } from './components/Overview';
@@ -15,6 +15,7 @@ import { ContentCMS } from './components/ContentCMS';
 import { SystemConfig } from './components/SystemConfig';
 import { AdminList } from './components/AdminList';
 import { LogViewer } from './components/LogViewer';
+import { RanksManagement } from './components/RanksManagement';
 
 interface AdminIndexProps {
   role: UserRole;
@@ -63,6 +64,7 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
     { id: 'impact', label: 'Dampak ESG', icon: BarChart3 },
     { id: 'communication', label: 'Broadcast', icon: Megaphone },
     { id: 'content', label: 'Konten CMS', icon: FileText },
+    { id: 'ranks', label: 'Milestone & Rank', icon: Award },
     { id: 'admins', label: 'Admin List', icon: UserCog },
     { id: 'logs', label: 'Activity Logs', icon: Shield },
     { id: 'settings', label: 'Pengaturan', icon: Settings },
@@ -78,6 +80,7 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
                   setUsers={setGlobalUsers} 
                   inventory={globalInventory} 
                   claims={globalClaims} 
+                  currentUser={currentUser}
                />;
       case 'moderation':
         return <Moderation claims={globalClaims} onReportUpdate={() => onRefresh && onRefresh()} />;
@@ -91,6 +94,8 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
         return <ContentCMS faqs={globalFAQs} setFaqs={setGlobalFAQs} onRefresh={() => onRefresh && onRefresh()} currentUser={currentUser} />;
       case 'admins':
         return <AdminList currentUser={currentUser} onMenuRefresh={() => onRefresh && onRefresh()} />;
+      case 'ranks':
+        return <RanksManagement />;
       case 'logs':
         return <LogViewer />;
       case 'settings':
@@ -163,19 +168,19 @@ export const AdminIndex: React.FC<AdminIndexProps> = ({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#FDFBF7] dark:bg-stone-950 transition-colors duration-300">
         {/* Mobile Header */}
-        <header className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 z-40">
+        <header className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 z-40 shrink-0">
             <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-stone-600 dark:text-stone-300">
                 <Menu className="w-6 h-6" />
             </button>
-            <span className="font-black text-stone-900 dark:text-white italic">ADMIN DASHBOARD</span>
+            <span className="font-black text-stone-900 dark:text-white italic tracking-tight">ADMIN DASHBOARD</span>
             <div className="w-8"></div>
         </header>
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-7xl mx-auto min-h-full">
                 {renderContent()}
             </div>
         </div>

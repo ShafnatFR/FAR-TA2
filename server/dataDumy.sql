@@ -42,26 +42,26 @@ INSERT INTO `badges` (`id`, `name`, `role`, `min_points`, `description`) VALUES
 
 -- 2. USERS (20 Baris: 5 Donatur, 5 Penerima, 5 Relawan, 4 Admin, 1 Super Admin)
 INSERT INTO `users` (`id`, `name`, `email`, `password`, `phone`, `role`, `status`, `points`, `selected_badge_id`) VALUES
-(1, 'Resto Nusantara', 'donatur1@mail.com', 'pass123', '08111111111', 'DONATUR', 'ACTIVE', 150, 2),
-(2, 'Toko Roti Sedap', 'donatur2@mail.com', 'pass123', '08111111112', 'DONATUR', 'ACTIVE', 600, 3),
-(3, 'Hotel Mawar', 'donatur3@mail.com', 'pass123', '08111111113', 'DONATUR', 'ACTIVE', 1200, 4),
-(4, 'Katering Ibu Sari', 'donatur4@mail.com', 'pass123', '08111111114', 'DONATUR', 'ACTIVE', 50, 1),
-(5, 'Supermarket Segar', 'donatur5@mail.com', 'pass123', '08111111115', 'DONATUR', 'ACTIVE', 5500, 5),
-(6, 'Panti Asuhan Kasih', 'penerima1@mail.com', 'pass123', '08222222221', 'PENERIMA', 'ACTIVE', 60, 7),
-(7, 'Komunitas Warga RT 05', 'penerima2@mail.com', 'pass123', '08222222222', 'PENERIMA', 'ACTIVE', 250, 8),
-(8, 'Ibu Siti (Individu)', 'penerima3@mail.com', 'pass123', '08222222223', 'PENERIMA', 'ACTIVE', 10, 6),
-(9, 'Yayasan Anak Bangsa', 'penerima4@mail.com', 'pass123', '08222222224', 'PENERIMA', 'ACTIVE', 600, 9),
-(10, 'Pondok Lansia', 'penerima5@mail.com', 'pass123', '08222222225', 'PENERIMA', 'ACTIVE', 1100, 10),
-(11, 'Andi (Motor)', 'relawan1@mail.com', 'pass123', '08333333331', 'RELAWAN', 'ACTIVE', 150, 12),
-(12, 'Budi (Mobil)', 'relawan2@mail.com', 'pass123', '08333333332', 'RELAWAN', 'ACTIVE', 600, 13),
-(13, 'Citra (Motor)', 'relawan3@mail.com', 'pass123', '08333333333', 'RELAWAN', 'ACTIVE', 1100, 14),
-(14, 'Deni (Motor)', 'relawan4@mail.com', 'pass123', '08333333334', 'RELAWAN', 'ACTIVE', 50, 11),
-(15, 'Eka (Mobil Box)', 'relawan5@mail.com', 'pass123', '08333333335', 'RELAWAN', 'ACTIVE', 5200, 15),
-(16, 'Admin Fajar', 'admin1@mail.com', 'pass123', '08444444441', 'ADMIN', 'ACTIVE', 0, 16),
-(17, 'Admin Gita', 'admin2@mail.com', 'pass123', '08444444442', 'ADMIN', 'ACTIVE', 600, 17),
-(18, 'Admin Hadi', 'admin3@mail.com', 'pass123', '08444444443', 'ADMIN', 'ACTIVE', 1200, 18),
-(19, 'Admin Indah', 'admin4@mail.com', 'pass123', '08444444444', 'ADMIN', 'ACTIVE', 5500, 19),
-(20, 'Super Jaka', 'super@mail.com', 'pass123', '08555555555', 'SUPER_ADMIN', 'ACTIVE', 0, 20);
+(1, 'Resto Nusantara', 'donatur1@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08111111111', 'DONATUR', 'ACTIVE', 150, 2),
+(2, 'Toko Roti Sedap', 'donatur2@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08111111112', 'DONATUR', 'ACTIVE', 600, 3),
+(3, 'Hotel Mawar', 'donatur3@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08111111113', 'DONATUR', 'ACTIVE', 1200, 4),
+(4, 'Katering Ibu Sari', 'donatur4@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08111111114', 'DONATUR', 'ACTIVE', 50, 1),
+(5, 'Supermarket Segar', 'donatur5@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08111111115', 'DONATUR', 'ACTIVE', 5500, 5),
+(6, 'Panti Asuhan Kasih', 'penerima1@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08222222221', 'PENERIMA', 'ACTIVE', 60, 7),
+(7, 'Komunitas Warga RT 05', 'penerima2@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08222222222', 'PENERIMA', 'ACTIVE', 250, 8),
+(8, 'Ibu Siti (Individu)', 'penerima3@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08222222223', 'PENERIMA', 'ACTIVE', 10, 6),
+(9, 'Yayasan Anak Bangsa', 'penerima4@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08222222224', 'PENERIMA', 'ACTIVE', 600, 9),
+(10, 'Pondok Lansia', 'penerima5@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08222222225', 'PENERIMA', 'ACTIVE', 1100, 10),
+(11, 'Andi (Motor)', 'relawan1@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08333333331', 'RELAWAN', 'ACTIVE', 150, 12),
+(12, 'Budi (Mobil)', 'relawan2@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08333333332', 'RELAWAN', 'ACTIVE', 600, 13),
+(13, 'Citra (Motor)', 'relawan3@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08333333333', 'RELAWAN', 'ACTIVE', 1100, 14),
+(14, 'Deni (Motor)', 'relawan4@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08333333334', 'RELAWAN', 'ACTIVE', 50, 11),
+(15, 'Eka (Mobil Box)', 'relawan5@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08333333335', 'RELAWAN', 'ACTIVE', 5200, 15),
+(16, 'Admin Fajar', 'admin1@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08444444441', 'ADMIN', 'ACTIVE', 0, 16),
+(17, 'Admin Gita', 'admin2@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08444444442', 'ADMIN', 'ACTIVE', 600, 17),
+(18, 'Admin Hadi', 'admin3@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08444444443', 'ADMIN', 'ACTIVE', 1200, 18),
+(19, 'Admin Indah', 'admin4@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08444444444', 'ADMIN', 'ACTIVE', 5500, 19),
+(20, 'Super Jaka', 'super@mail.com', '$2b$10$NlP5XHowLaXMcBb5NoWIl.OIfdboITPjTSCvPjGRYY9BvIrgapusS', '08555555555', 'SUPER_ADMIN', 'ACTIVE', 0, 20);
 
 -- 3. ADDRESSES (20 Baris, didistribusikan ke user)
 INSERT INTO `addresses` (`id`, `user_id`, `label`, `full_address`, `latitude`, `longitude`, `contact_name`, `contact_phone`, `is_primary`) VALUES

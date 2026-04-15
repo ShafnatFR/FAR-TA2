@@ -13,6 +13,7 @@ import { ProfileIndex } from './view/profile';
 import { NotificationsPage } from './view/common/Notifications';
 import { InventoryManager } from './view/provider/components/Inventory';
 import { ReportsView } from './view/provider/components/Reports';
+import { getSocialSystem } from './utils/socialSystem';
 import { ReviewsView } from './view/provider/components/Reviews';
 import { VerificationPendingModal } from './view/common/VerificationPendingModal'; 
 import { VerificationRejectedModal } from './view/common/VerificationRejectedModal';
@@ -57,10 +58,11 @@ const App: React.FC = () => {
 
   // Global App Settings from Backend
   const [appSettings, setAppSettings] = useState<{ disableExpiryLogic: boolean }>({ disableExpiryLogic: false });
+  const [rankLevels, setRankLevels] = useState<any[]>([]);
 
   // --- SESSION CHECK ON MOUNT ---
   useEffect(() => {
-    const checkSession = () => {
+    const checkSession = async () => {
         // Cek Local Storage (Remember Me) atau Session Storage (Sementara)
         const savedSession = localStorage.getItem('far_session') || sessionStorage.getItem('far_session');
         
@@ -70,10 +72,24 @@ const App: React.FC = () => {
                 setRole(parsedUser.role);
                 setCurrentUser(parsedUser);
                 setCurrentView('dashboard');
+
+                // RE-FETCH FRESH DATA (Check for status updates like ACTIVE)
+                const freshUser = await db.getUser(parsedUser.id);
+                if (freshUser) {
+                    setCurrentUser(freshUser);
+                    setRole(freshUser.role);
+                    // Update session storage with fresh data
+                    const freshSession = JSON.stringify(freshUser);
+                    if (localStorage.getItem('far_session')) localStorage.setItem('far_session', freshSession);
+                    else sessionStorage.setItem('far_session', freshSession);
+                }
             } catch (e) {
-                console.error("Session parse error", e);
-                localStorage.removeItem('far_session');
-                sessionStorage.removeItem('far_session');
+                console.error("Session re-verification error", e);
+                // Only clear on parse error, not network error
+                if (e instanceof SyntaxError) {
+                    localStorage.removeItem('far_session');
+                    sessionStorage.removeItem('far_session');
+                }
             }
         }
     };
@@ -89,6 +105,9 @@ const App: React.FC = () => {
   }, [isDarkMode]);
 
   const toggleTheme = () => setIsDarkMode(prev => !prev);
+
+  // Compute social system dynamically
+  const socialSystem = useMemo(() => getSocialSystem(rankLevels), [rankLevels]);
 
     const fetchData = useCallback(async (forceRefresh: boolean = false) => {
         if (!role || !currentUser) return; 
@@ -125,6 +144,10 @@ const App: React.FC = () => {
                             const users = await db.getUsers();
                             setGlobalUsers(users);
                         }
+
+                        // Fetch Rank Levels if not in cache or just always for now to stay fresh
+                        db.getRankLevels().then(levels => setRankLevels(levels)).catch(e => console.error(e));
+
                         return; // EXIT EARLY
                     }
                 } catch (e) {
@@ -142,20 +165,38 @@ const App: React.FC = () => {
 
             console.log("Fetching Data with Filters:", { providerIdFilter, claimsFilters });
 
-            const [inventoryData, claimsData, settingsData, faqData] = await Promise.all([
+            const [inventoryData, claimsData, settingsData, faqData, latestUser] = await Promise.all([
                 db.getInventory(providerIdFilter),
                 db.getClaims(claimsFilters),
                 db.getSettings(),
-                db.getFAQs()
+                db.getFAQs(),
+                currentUser?.id ? db.getUser(currentUser.id) : Promise.resolve(null)
             ]);
 
             if (settingsData) setAppSettings(settingsData);
             if (inventoryData) setFoodItems(inventoryData);
             if (faqData) setGlobalFAQs(faqData);
             
+            // Sync current user status if changed (e.g. Activated by Admin)
+            if (latestUser && currentUser) {
+                const hasStatusChanged = latestUser.status?.toLowerCase() !== currentUser.status?.toLowerCase();
+                if (hasStatusChanged) {
+                    const updatedUser = { ...currentUser, status: latestUser.status.toLowerCase() };
+                    setCurrentUser(updatedUser);
+                    console.log("[AUTH] User status updated via refresh:", updatedUser.status);
+                    
+                    // Update persistence
+                    if (localStorage.getItem('far_session')) {
+                        localStorage.setItem('far_session', JSON.stringify(updatedUser));
+                    } else if (sessionStorage.getItem('far_session')) {
+                        sessionStorage.setItem('far_session', JSON.stringify(updatedUser));
+                    }
+                }
+            }
+
             let finalClaims = claimsData || [];
             if (role === 'recipient' && claimsData) {
-                finalClaims = claimsData.filter(c => c.receiverId === currentUser.id);
+                finalClaims = claimsData.filter(c => c.receiverId === currentUser?.id);
             }
             setClaimHistory(finalClaims);
 
@@ -494,6 +535,9 @@ const App: React.FC = () => {
           setCurrentView('reports'); 
       } else if (view === 'inventory-rated') {
           setCurrentView('reviews'); 
+      } else if (view === 'inventory-orders' || view === 'inventory-history') {
+          setHistoryFilter(null);
+          setCurrentView(view);
       } else {
           setHistoryFilter(null);
           setCurrentView(view);
@@ -511,7 +555,7 @@ const App: React.FC = () => {
               return <VerificationRejectedModal onLogout={handleLogout} userName={currentUser.name} />;
           }
           if (currentUser.status?.toUpperCase() === 'PENDING') {
-              return <VerificationPendingModal onLogout={handleLogout} userName={currentUser.name} />;
+              return <VerificationPendingModal onLogout={handleLogout} onRefresh={() => fetchData(true)} userName={currentUser.name} />;
           }
       }
 
@@ -558,11 +602,12 @@ const App: React.FC = () => {
             allAddresses={allAddresses}
             onUpdateUser={handleUpdateUser}
             onEditAvatar={handleEditAvatar}
+            socialSystem={socialSystem}
           />
       );
 
       if (role === 'individual_donor' || role === 'corporate_donor') {
-          if (currentView === 'inventory') return (
+          if (currentView === 'inventory' || currentView === 'inventory-orders' || currentView === 'inventory-history') return (
             <InventoryManager 
                 foodItems={foodItems} 
                 setFoodItems={setFoodItems} 
@@ -574,6 +619,7 @@ const App: React.FC = () => {
                 onUpdateStatus={handleUpdateStatus} 
                 currentUser={currentUser}
                 onRefresh={() => fetchData(true)}
+                initialView={currentView === 'inventory-orders' ? 'orders' : currentView === 'inventory-history' ? 'history' : 'stock'}
                 onNavigate={(view) => {
                     if (view === 'profile-address') {
                         setProfileInitialTab('address');
@@ -627,6 +673,7 @@ const App: React.FC = () => {
                 onCompleteOnboarding={handleCompleteTour} 
                 notifications={userNotifications}
                 onRefresh={() => fetchData(true)}
+                socialSystem={socialSystem}
             />
           );
       }
@@ -657,6 +704,7 @@ const App: React.FC = () => {
                 isLoading={isGlobalLoading} 
                 onRefresh={() => fetchData(true)} 
                 notifications={userNotifications}
+                socialSystem={socialSystem}
             />
           );
       }
@@ -675,6 +723,7 @@ const App: React.FC = () => {
                 globalUsers={globalUsers}
                 inventory={foodItems}
                 notifications={userNotifications}
+                socialSystem={socialSystem}
             />
           );
       }
@@ -694,6 +743,7 @@ const App: React.FC = () => {
                 broadcastMessages={userNotifications.filter(n => n.id.includes('broadcast'))}
                 setBroadcastMessages={setUserNotifications as any}
                 allAddresses={allAddresses}
+                socialSystem={socialSystem}
                 appSettings={appSettings}
                 setAppSettings={setAppSettings}
                 onRefresh={() => fetchData(true)}

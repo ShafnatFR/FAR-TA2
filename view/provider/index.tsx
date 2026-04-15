@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { Bell } from 'lucide-react'; 
+import { Bell, Sparkles, Utensils } from 'lucide-react'; 
 import { DashboardStats } from './components/Dashboard';
 import { FoodItem, ClaimHistoryItem, UserData } from '../../types';
 import { NotificationsPage } from '../common/Notifications';
@@ -9,7 +9,12 @@ import { ImpactWidget } from './components/Dashboard/ImpactWidget';
 import { NearbyRequests } from './components/Dashboard/NearbyRequests';
 import { CorporateAIWidgets } from './components/CorporateAIWidgets';
 import { KitchenScanner } from '../common/KitchenScanner';
+import { EcoPackagingEditor } from '../common/EcoPackagingEditor';
+import { CSRWriterEditor } from '../common/CSRWriterEditor';
+import { KitchenHistory } from './components/KitchenHistory';
 import { db } from '../../services/db';
+import { SOCIAL_SYSTEM } from '../../constants';
+import { RankDetailsModal } from './components/Dashboard/RankDetailsModal';
 
 interface ProviderIndexProps {
   onOpenNotifications: () => void;
@@ -20,8 +25,9 @@ interface ProviderIndexProps {
   claimHistory?: ClaimHistoryItem[];
   currentUser?: UserData | null;
   onCompleteOnboarding?: () => void; 
-  notifications?: any[]; // New Prop
-  onRefresh?: () => void; // New Prop
+  notifications?: any[];
+  onRefresh?: () => void;
+  socialSystem?: any;
 }
 
 export const ProviderIndex: React.FC<ProviderIndexProps> = ({ 
@@ -32,11 +38,15 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
     currentUser,
     onCompleteOnboarding,
     notifications = [],
-    onRefresh
+    onRefresh,
+    socialSystem
 }) => {
   const [socialImpact, setSocialImpact] = useState<any>(null);
   const [isLoadingImpact, setIsLoadingImpact] = useState(true);
   const [showKitchenScanner, setShowKitchenScanner] = useState(false);
+  const [showPackagingEditor, setShowPackagingEditor] = useState(false);
+  const [showCSREditor, setShowCSREditor] = useState(false);
+  const [showKitchenHistory, setShowKitchenHistory] = useState(false);
   
   const userName = currentUser?.name || 'Restoran Berkah';
 
@@ -56,7 +66,7 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
           };
           fetchImpact();
       }
-  }, [currentUser?.id]);
+  }, [currentUser]);
 
   const handleFinishTour = () => {
       if (onCompleteOnboarding) {
@@ -68,6 +78,9 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
       const myClaims = claimHistory.filter(h => h.providerName === userName);
       const completedOrders = myClaims.filter(h => h.status?.toLowerCase() === 'completed');
       
+      // Hitung Pesanan Masuk (Aktif)
+      const activeOrdersCount = myClaims.filter(h => ['PENDING', 'IN_PROGRESS', 'ACTIVE', 'CLAIMED'].includes(h.status?.toUpperCase() || '')).length;
+
       // REAL RATING CALCULATION
       const ratedOrders = completedOrders.filter(h => h.rating && h.rating > 0);
       const totalRating = ratedOrders.reduce((acc, curr) => acc + (curr.rating || 0), 0);
@@ -80,6 +93,7 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
           totalPotentialPoints: socialImpact?.totalPotentialPoints || 0,
           activeStock: foodItems.length,
           completedOrders: completedOrders.length,
+          activeOrders: activeOrdersCount, // NEW
           pendingReports,
           avgRating
       };
@@ -130,6 +144,7 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
                 setActiveTab={onNavigate} 
                 stats={stats}
                 userId={String(currentUser?.id || '')}
+                socialSystem={socialSystem}
             />
 
             <div className="mt-10">
@@ -137,14 +152,81 @@ export const ProviderIndex: React.FC<ProviderIndexProps> = ({
             </div>
 
             {currentUser?.role === 'corporate_donor' && (
-                <CorporateAIWidgets currentUser={currentUser} foodItems={foodItems} />
+                <CorporateAIWidgets 
+                    currentUser={currentUser} 
+                    foodItems={foodItems} 
+                    onOpenTool={(tool) => {
+                        if (tool === 'recipe') setShowKitchenScanner(true);
+                        if (tool === 'packaging') setShowPackagingEditor(true);
+                        if (tool === 'csr') setShowCSREditor(true);
+                    }}
+                />
             )}
+
+            {/* AI Tools Section */}
+            <div className="mt-10 space-y-4">
+                <div className="flex items-center justify-between px-2">
+                    <h2 className="text-sm font-black text-stone-900 dark:text-white uppercase tracking-widest italic">Peralatan AI Kreatif</h2>
+                    <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 px-2 py-0.5 rounded-full">Kreativitas Tanpa Batas</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <button 
+                        onClick={() => setShowKitchenScanner(true)}
+                        className="p-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-[2.5rem] flex flex-col items-center text-center gap-3 hover:border-orange-500 hover:shadow-xl hover:shadow-orange-100 transition-all group"
+                    >
+                        <div className="w-14 h-14 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center text-orange-600 group-hover:scale-110 transition-transform">
+                            <Sparkles className="w-7 h-7" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-black text-stone-900 dark:text-white uppercase italic tracking-tight">Eksplor Kitchen AI</p>
+                            <p className="text-[9px] text-stone-500 font-medium uppercase mt-0.5">Mulai Scan Bahan</p>
+                        </div>
+                    </button>
+
+                    <button 
+                        onClick={() => setShowKitchenHistory(true)}
+                        className="p-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-[2.5rem] flex flex-col items-center text-center gap-3 hover:border-orange-500 hover:shadow-xl hover:shadow-orange-100 transition-all group"
+                    >
+                        <div className="w-14 h-14 bg-stone-100 dark:bg-stone-800 rounded-2xl flex items-center justify-center text-stone-400 group-hover:text-orange-600 group-hover:scale-110 transition-transform">
+                             <Utensils className="w-7 h-7" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-black text-stone-900 dark:text-white uppercase italic tracking-tight">Riwayat Resep</p>
+                            <p className="text-[9px] text-stone-500 font-medium uppercase mt-0.5">Lihat Koleksi Anda</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
         </div>
 
         {showKitchenScanner && (
             <KitchenScanner 
                 currentUser={currentUser} 
                 onBack={() => setShowKitchenScanner(false)} 
+            />
+        )}
+
+        {showPackagingEditor && (
+            <EcoPackagingEditor 
+                currentUser={currentUser} 
+                foodItems={foodItems} 
+                onBack={() => setShowPackagingEditor(false)} 
+            />
+        )}
+
+        {showCSREditor && (
+            <CSRWriterEditor 
+                currentUser={currentUser} 
+                foodItems={foodItems} 
+                onBack={() => setShowCSREditor(false)} 
+            />
+        )}
+
+        {showKitchenHistory && (
+            <KitchenHistory 
+                currentUser={currentUser} 
+                onBack={() => setShowKitchenHistory(false)} 
             />
         )}
     </>

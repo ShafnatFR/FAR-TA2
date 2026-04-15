@@ -123,14 +123,71 @@ export const AdminList: React.FC<AdminListProps> = ({ currentUser, onMenuRefresh
   };
 
   const handleExportLogs = () => {
-      const csvContent = "data:text/csv;charset=utf-8," + logs.map(e => Object.values(e).join(",")).join("\n");
-      const encodedUri = encodeURI(csvContent);
+      if (logs.length === 0) return;
+      
+      const headers = ["ID", "Waktu", "Aktor ID", "Aktor", "Aksi", "Detail", "Level"];
+      
+      const sanitize = (val: any) => {
+          if (val === null || val === undefined) return '""';
+          const str = String(val).replace(/"/g, '""').replace(/\n/g, ' ');
+          return `"${str}"`;
+      };
+
+      const rows = logs.map(log => [
+          sanitize(log.id),
+          sanitize(new Date(log.created_at || log.timestamp).toLocaleString('id-ID')),
+          sanitize(log.actor_id),
+          sanitize(log.actor_name || log.actor || 'System'),
+          sanitize(log.action),
+          sanitize(log.details),
+          sanitize(log.severity || 'info')
+      ]);
+
+      const csvContent = [headers.map(h => `"${h}"`).join(","), ...rows.map(r => r.join(","))].join("\r\n");
+      const BOM = "\uFEFF";
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "system_logs.csv");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `system_logs_${new Date().toISOString().split('T')[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+  };
+
+  const handleExportAdmins = () => {
+      if (admins.length === 0) return;
+      
+      const headers = ["ID", "Nama", "Email", "Role", "Status", "Poin", "Dibuat Pada"];
+      
+      const sanitize = (val: any) => {
+          if (val === null || val === undefined) return '""';
+          const str = String(val).replace(/"/g, '""').replace(/\n/g, ' ');
+          return `"${str}"`;
+      };
+
+      const rows = admins.map(admin => [
+          sanitize(admin.id),
+          sanitize(admin.name),
+          sanitize(admin.email),
+          sanitize(admin.role),
+          sanitize(admin.status),
+          sanitize(admin.points || 0),
+          sanitize(new Date(admin.created_at).toLocaleString('id-ID'))
+      ]);
+
+      const csvContent = [headers.map(h => `"${h}"`).join(","), ...rows.map(r => r.join(","))].join("\r\n");
+      const BOM = "\uFEFF";
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `admin_list_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
   };
 
   return (
@@ -143,6 +200,7 @@ export const AdminList: React.FC<AdminListProps> = ({ currentUser, onMenuRefresh
                 <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mt-1 ml-11">Kelola tim pengelola dan pantau aktivitas sistem</p>
              </div>
              <div className="flex gap-2">
+                 <Button variant="outline" className="text-[10px] font-black uppercase tracking-widest h-10 px-6 rounded-xl border-2" onClick={handleExportAdmins}>Download Admins</Button>
                  <Button variant="outline" className="text-[10px] font-black uppercase tracking-widest h-10 px-6 rounded-xl border-2" onClick={handleExportLogs}>Download Logs</Button>
                  <Button className="text-[10px] font-black uppercase tracking-widest h-10 px-6 rounded-xl shadow-lg shadow-orange-500/20" onClick={() => { setIsEditingAdmin(false); setNewAdminForm({ id: '', name: '', email: '', password: '', role: 'admin', permissions: [], status: 'active' }); setShowAddAdminModal(true); }}><UserPlus className="w-4 h-4 mr-2" /> Add Admin</Button>
              </div>

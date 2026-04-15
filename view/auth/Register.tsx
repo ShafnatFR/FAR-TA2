@@ -97,11 +97,10 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
         // Optimistically update the result object
         result.joinDate = wibTimestamp;
 
-        // Send update to backend to fix the timestamp
+        // Send update to backend to fix the timestamp but preserve status
         await db.upsertUser({
             ...result,
-            joinDate: wibTimestamp,
-            status: 'active'
+            joinDate: wibTimestamp
         });
 
         // Panggil onRegister (yang sebenarnya adalah wrapper handleLogin di App.tsx)
@@ -240,7 +239,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
                             } 
                             value={formData.name} 
                             onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                            className="!bg-stone-50 !border-stone-200 !text-stone-900 placeholder:!text-black focus:!border-orange-500 focus:!bg-white rounded-2xl py-3.5 transition-all font-medium"
+                            className="!bg-stone-50 !border-stone-200 !text-stone-900 focus:!border-orange-500 focus:!bg-white rounded-2xl py-3.5 transition-all font-medium"
                             labelClassName="text-orange-600 font-black text-[10px] uppercase tracking-widest group-focus-within:text-orange-500"
                             containerClassName="space-y-1"
                             error={errors.name}
@@ -253,7 +252,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
                             placeholder="nama@email.com" 
                             value={formData.email} 
                             onChange={(e) => setFormData({...formData, email: e.target.value})} 
-                            className="!bg-stone-50 !border-stone-200 !text-stone-900 placeholder:!text-black focus:!border-orange-500 focus:!bg-white rounded-2xl py-3.5 transition-all font-medium"
+                            className="!bg-stone-50 !border-stone-200 !text-stone-900 focus:!border-orange-500 focus:!bg-white rounded-2xl py-3.5 transition-all font-medium"
                             labelClassName="text-orange-600 font-black text-[10px] uppercase tracking-widest group-focus-within:text-orange-500"
                             containerClassName="space-y-1"
                             error={errors.email}
@@ -266,7 +265,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
                             leftAddon={<span className="text-stone-400 font-bold px-1">+62</span>}
                             value={formData.phone} 
                             onChange={handlePhoneChange}
-                            className="!bg-stone-50 !border-stone-200 !text-stone-900 placeholder:!text-black focus:!border-orange-500 focus:!bg-white rounded-r-2xl py-3.5 transition-all font-medium"
+                            className="!bg-stone-50 !border-stone-200 !text-stone-900 focus:!border-orange-500 focus:!bg-white rounded-r-2xl py-3.5 transition-all font-medium"
                             labelClassName="text-orange-600 font-black text-[10px] uppercase tracking-widest group-focus-within:text-orange-500"
                             containerClassName="space-y-1"
                             error={errors.phone}
@@ -281,7 +280,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
                                     placeholder="••••••" 
                                     value={formData.password} 
                                     onChange={(e) => setFormData({...formData, password: e.target.value})}
-                                    className={`!bg-stone-50 !border-stone-200 !text-stone-900 placeholder:!text-black focus:!border-orange-500 focus:!bg-white rounded-2xl py-3.5 transition-all font-medium ${errors.password ? '!border-red-500' : ''}`}
+                                    className={`!bg-stone-50 !border-stone-200 !text-stone-900 focus:!border-orange-500 focus:!bg-white rounded-2xl py-3.5 transition-all font-medium ${errors.password ? '!border-red-500' : ''}`}
                                     labelClassName="text-orange-600 font-black text-[10px] uppercase tracking-widest group-focus-within:text-orange-500"
                                     containerClassName="space-y-1"
                                     rightElement={
@@ -343,7 +342,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate, onRegist
                                     placeholder="••••••" 
                                     value={formData.confirmPassword} 
                                     onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})} 
-                                    className={`!bg-stone-50 !border-stone-200 !text-stone-900 placeholder:!text-black focus:!border-orange-500 focus:!bg-white rounded-2xl py-3.5 transition-all font-medium ${errors.confirmPassword ? '!border-red-500' : ''}`}
+                                    className={`!bg-stone-50 !border-stone-200 !text-stone-900 focus:!border-orange-500 focus:!bg-white rounded-2xl py-3.5 transition-all font-medium ${errors.confirmPassword ? '!border-red-500' : ''}`}
                                     labelClassName="text-orange-600 font-black text-[10px] uppercase tracking-widest group-focus-within:text-orange-500"
                                     containerClassName="space-y-1"
                                     rightElement={

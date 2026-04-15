@@ -14,15 +14,17 @@ interface DashboardStatsProps {
         totalPotentialPoints: number;
         activeStock: number;
         completedOrders: number;
+        activeOrders: number; // NEW
         pendingReports: number;
         avgRating: number;
     };
+    socialSystem?: any;
 }
 
-export const DashboardStats: React.FC<DashboardStatsProps> = ({setActiveTab, stats, userId}) => {
+export const DashboardStats: React.FC<DashboardStatsProps> = ({setActiveTab, stats, userId, socialSystem}) => {
   const [showRankDetails, setShowRankDetails] = useState(false);
   
-  const providerSystem = SOCIAL_SYSTEM.provider;
+  const providerSystem = socialSystem?.provider || SOCIAL_SYSTEM.provider;
   const currentPoints = stats.totalPoints;
   
   const currentRank = providerSystem.tiers.slice().reverse().find(t => currentPoints >= t.minPoints) || providerSystem.tiers[0];
@@ -47,6 +49,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({setActiveTab, sta
             setActiveTab={setActiveTab}
             pendingReports={stats.pendingReports}
             avgRating={stats.avgRating}
+            activeOrders={stats.activeOrders} // NEW
         />
 
         <StatsGrid 

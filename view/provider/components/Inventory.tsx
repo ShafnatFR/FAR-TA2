@@ -17,6 +17,7 @@ interface InventoryManagerProps {
     currentUser: UserData | null;
     onRefresh?: () => void; 
     onNavigate: (view: string) => void;
+    initialView?: 'stock' | 'orders' | 'history';
 }
 
 export const InventoryManager: React.FC<InventoryManagerProps> = ({
@@ -30,10 +31,18 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     onUpdateStatus,
     currentUser,
     onRefresh,
-    onNavigate
+    onNavigate,
+    initialView = 'stock'
 }) => {
-    const [currentView, setCurrentView] = useState<'stock' | 'orders' | 'history'>('stock');
+    const [currentView, setCurrentView] = useState<'stock' | 'orders' | 'history'>(initialView);
     const [isTransitioning, setIsTransitioning] = useState(false);
+
+    // Sync initialView when it changes from outside
+    React.useEffect(() => {
+        if (initialView && initialView !== currentView) {
+            setCurrentView(initialView);
+        }
+    }, [initialView]);
 
     // Mappers
     const mapClaimToOrder = (claim: ClaimHistoryItem): ProviderOrder => ({
@@ -82,9 +91,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
         }
     });
 
-    const orders = claimHistory.filter(c => ['PENDING', 'IN_PROGRESS', 'ACTIVE'].includes(c.status?.toUpperCase() || '')).map(mapClaimToOrder);
+    const orders = claimHistory.filter(c => ['PENDING', 'IN_PROGRESS', 'ACTIVE', 'CLAIMED'].includes(c.status?.toUpperCase() || '')).map(mapClaimToOrder);
     const activeCount = foodItems.filter(i => i.status?.toUpperCase() === 'AVAILABLE' || i.status?.toUpperCase() === 'ACTIVE').length;
-    const history = claimHistory.filter(c => !['PENDING', 'IN_PROGRESS', 'ACTIVE'].includes(c.status?.toUpperCase() || '')).map(mapClaimToOrder);
+    const history = claimHistory.filter(c => !['PENDING', 'IN_PROGRESS', 'ACTIVE', 'CLAIMED'].includes(c.status?.toUpperCase() || '')).map(mapClaimToOrder);
 
     // Wrapper function to handle view switching with animation
     const handleSwitchView = (view: 'stock' | 'orders' | 'history') => {

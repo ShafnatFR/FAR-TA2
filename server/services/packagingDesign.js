@@ -29,4 +29,27 @@ async function generatePackagingDesign(data, userId) {
     return await callGeminiWithRotation(userId, prompt, { isJson: true });
 }
 
-module.exports = { generatePackagingDesign };
+async function generatePackagingImage(data, userId) {
+    // We use AI to generate a precise prompt for an image generator (Polinations / DALL-E style)
+    const prompt = `
+        Tuliskan prompt bahasa Inggris yang sangat detail untuk pembuat gambar AI (seperti DALL-E atau Midjourney).
+        OBJEK: Desain kemasan eco-friendly premium untuk makanan: ${data.foodName}.
+        KONSEP: ${data.packagingDesc}
+        GAYA: Foto produk studio, pencahayaan sinematik, minimalis, latar belakang bersih.
+        HASIL: Hanya berikan prompt bahasa Inggris saja, tanpa penjelasan lain.
+    `;
+
+    let visualPrompt = await callGeminiWithRotation(userId, prompt, { isJson: false });
+    
+    // Clean up: Remove introductory text if present (e.g., "The prompt is:", quotes, etc.)
+    visualPrompt = visualPrompt.replace(/^(Here is a prompt:|The prompt is:|Prompt:)/i, "").trim();
+    visualPrompt = visualPrompt.replace(/^["']|["']$/g, "").trim(); // Remove leading/trailing quotes
+    
+    // Using Pollinations.ai for live image generation via URL
+    const encodedPrompt = encodeURIComponent(visualPrompt);
+    const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1024&height=1024&seed=${Math.floor(Math.random()*1000)}&nologo=true`;
+    
+    return { imageUrl };
+}
+
+module.exports = { generatePackagingDesign, generatePackagingImage };

@@ -245,9 +245,35 @@ export const KitchenScanner: React.FC<KitchenScannerProps> = ({ currentUser, onB
                                 </div>
                             </div>
 
-                            <Button onClick={resetScanner} className="w-full bg-stone-900 text-white py-5 rounded-3xl font-black uppercase text-[11px] tracking-widest">
-                                Cari Resep Lain
-                            </Button>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button 
+                                    onClick={resetScanner} 
+                                    variant="outline"
+                                    className="w-full bg-white dark:bg-stone-900 text-stone-900 dark:text-white py-5 rounded-3xl font-black uppercase text-[11px] tracking-widest"
+                                >
+                                    Cari Lain
+                                </Button>
+                                <Button 
+                                    onClick={async () => {
+                                        if(!currentUser) return;
+                                        try {
+                                            await db.saveCorporateAIResult({
+                                                donorId: Number(currentUser.id),
+                                                foodId: 0, // Not linked to a specific inventory item
+                                                type: 'KITCHEN',
+                                                title: `Resep Kitchen AI: ${result.ingredients?.slice(0, 2).join(', ')}...`,
+                                                content: JSON.stringify(result)
+                                            });
+                                            alert("Resep berhasil disimpan ke riwayat!");
+                                        } catch (e: any) {
+                                            alert("Gagal menyimpan resep: " + e.message);
+                                        }
+                                    }}
+                                    className="w-full bg-orange-600 text-white py-5 rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-lg shadow-orange-500/20"
+                                >
+                                    Simpan Resep
+                                </Button>
+                            </div>
 
                             {/* External Recipes (Cookpad) */}
                             {result.externalRecipes && result.externalRecipes.length > 0 && (

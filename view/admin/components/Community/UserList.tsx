@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, PlusCircle, AlertCircle, Eye, Edit3, Trash2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, PlusCircle, AlertCircle, Eye, Edit3, Trash2, ChevronLeft, ChevronRight, RefreshCw, Shield } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { UserData, FoodItem, ClaimHistoryItem } from '../../../../types';
 import { UserModal } from './UserModal';
@@ -13,9 +13,10 @@ interface UserListProps {
     inventory: FoodItem[];
     claims: ClaimHistoryItem[];
     pendingCount: number;
+    currentUser: UserData | null;
 }
 
-export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, claims, pendingCount }) => {
+export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, claims, pendingCount, currentUser }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -85,14 +86,24 @@ export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, 
         setCurrentPage(1);
     }, [searchQuery, roleFilter, statusFilter]);
 
-    const handleSaveUser = (user: UserData) => {
-        if (user.id === 'new') {
-            setUsers(prev => [{ ...user, id: Date.now().toString() }, ...prev]);
-        } else {
-            setUsers(prev => prev.map(u => u.id === user.id ? user : u));
+    const handleSaveUser = async (user: UserData) => {
+        setIsProcessing(true);
+        try {
+            await db.upsertUser({ ...user, actor: currentUser ? { id: currentUser.id, name: currentUser.name } : undefined });
+            if (user.id === 'new') {
+                setUsers(prev => [{ ...user, id: Date.now().toString() }, ...prev]);
+            } else {
+                setUsers(prev => prev.map(u => u.id === user.id ? user : u));
+            }
+            setIsUserModalOpen(false);
+            setSelectedUser(null);
+            alert("Data pengguna berhasil diperbarui!");
+        } catch (error) {
+            console.error("Save failed:", error);
+            alert("Gagal menyimpan data pengguna.");
+        } finally {
+            setIsProcessing(false);
         }
-        setIsUserModalOpen(false);
-        setSelectedUser(null);
     };
 
     const processVerification = async (status: 'active' | 'suspended') => {
@@ -104,7 +115,10 @@ export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, 
             const updatedUser = { ...verificationUser, status: status };
             
             // 2. Save to Database
-            await db.upsertUser(updatedUser);
+            await db.upsertUser({ 
+                ...updatedUser, 
+                actor: currentUser ? { id: currentUser.id, name: currentUser.name } : undefined 
+            });
 
             // 3. Update Local State
             setUsers(prev => prev.map(u => u.id === verificationUser.id ? updatedUser : u));
@@ -239,7 +253,12 @@ export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, 
                                                 <div className="min-w-0">
                                                     <div className="flex items-center gap-2">
                                                         <p className="font-black text-xs text-stone-900 dark:text-white truncate">{user.name}</p>
-                                                        {isPending && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>}
+                                                        {isPending && (
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                                                                <span className="text-[7px] font-black bg-red-500 text-white px-1 py-0.5 rounded italic leading-none animate-bounce">NEW</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <p className="text-[9px] text-stone-500 truncate">{user.email}</p>
                                                 </div>
@@ -268,13 +287,15 @@ export const UserList: React.FC<UserListProps> = ({ users, setUsers, inventory, 
                                         <td className="px-3 py-3 text-right">
                                             {isPending ? (
                                                 <div className="flex justify-end">
+                                                <div className="flex justify-end">
                                                     <button
                                                         onClick={() => setVerificationUser(user)}
                                                         disabled={isProcessing}
-                                                        className="h-8 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center gap-2 text-[9px] font-bold shadow-md shadow-blue-500/20 transition-all active:scale-95 border border-blue-600 group/btn disabled:opacity-50"
+                                                        className="h-8 px-4 bg-amber-500 hover:bg-amber-600 text-white rounded-lg flex items-center gap-2 text-[9px] font-black shadow-lg shadow-amber-500/20 transition-all active:scale-95 border-b-2 border-amber-700 italic tracking-wider whitespace-nowrap"
                                                     >
-                                                        <Eye className="w-3.5 h-3.5" /> REVIEW DETAIL
+                                                        <Shield className="w-3.5 h-3.5" /> VERIFIKASI AKUN
                                                     </button>
+                                                </div>
                                                 </div>
                                             ) : (
                                                 <div className="flex justify-end gap-1">

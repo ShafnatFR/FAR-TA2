@@ -3,7 +3,6 @@ import React, { useMemo } from 'react';
 import { Bell, CheckCircle, Info, AlertTriangle, ArrowLeft, Megaphone, Sparkles, Package, Truck, Star, XCircle, PlayCircle } from 'lucide-react';
 import { Notification, UserRole, ClaimHistoryItem, BroadcastMessage, FoodItem } from '../../types';
 import { getDateTimeParts } from '../../utils/transformers';
-import { SOCIAL_SYSTEM } from '../../constants';
 import { db } from '../../services/db';
 
 interface NotificationsPageProps {

@@ -8,64 +8,111 @@ const aiDB = require("./aiDB");
  * 1. Subscriber Master Key
  * 2. User Personal Keys
  * 3. Global Pool Rotation (Fallback)
+ * 
+ * IMPORTANT: Keys are loaded lazily on first call to ensure
+ * dotenv has been configured before we read process.env.
  */
 
-const getGlobalPoolKeys = () => {
+let GLOBAL_KEYS = null; // Lazy loaded
+const MASTER_KEY_ENV = 'VITE_GEMINI_API_KEY_CORPORATE_MASTER';
+const failedKeys = new Map(); // key -> expiry timestamp
+let globalIndex = 0;
+
+function loadGlobalKeys() {
+    if (GLOBAL_KEYS !== null) return GLOBAL_KEYS;
+    
     const keys = [];
     if (process.env.VITE_GEMINI_API_KEY) keys.push(process.env.VITE_GEMINI_API_KEY);
-    for (let i = 2; i <= 50; i++) {
+    for (let i = 2; i <= 100; i++) {
         const key = process.env[`VITE_GEMINI_API_KEY_${i}`];
         if (key) keys.push(key);
     }
-    return [...new Set(keys)];
-};
+    GLOBAL_KEYS = [...new Set(keys)];
+    console.log(`[AI Utils] ✅ Global Key Pool loaded: ${GLOBAL_KEYS.length} keys available`);
+    return GLOBAL_KEYS;
+}
 
-const GLOBAL_KEYS = getGlobalPoolKeys();
-const MASTER_KEY = process.env.VITE_GEMINI_API_KEY_CORPORATE_MASTER;
-const failedKeys = new Set();
-let globalIndex = 0;
+function isKeyFailed(key) {
+    if (!failedKeys.has(key)) return false;
+    const expiry = failedKeys.get(key);
+    if (Date.now() > expiry) {
+        failedKeys.delete(key); // Cooldown expired, key is available again
+        return false;
+    }
+    return true;
+}
+
+function markKeyFailed(key, cooldownMs = 5 * 60 * 1000) {
+    failedKeys.set(key, Date.now() + cooldownMs);
+}
 
 /**
  * Core function to execute AI calls with robust rotation
  */
 async function callGeminiWithRotation(userId, prompt, options = {}) {
-    // 1. Determine Key Priority
+    const globalPool = loadGlobalKeys();
+    
+    // 1. Build key priority list
     const keysToTry = [];
     
     // Tier 1: Subscriber Master Key
-    const userSub = await aiDB.getUserAISubscription(userId);
-    if (userSub && userSub.ai_subscription_status === 'SUBSCRIBER' && MASTER_KEY) {
-        keysToTry.push(MASTER_KEY);
+    try {
+        const userSub = await aiDB.getUserAISubscription(userId);
+        const masterKey = process.env[MASTER_KEY_ENV];
+        if (userSub && userSub.ai_subscription_status === 'SUBSCRIBER' && masterKey) {
+            keysToTry.push({ key: masterKey, source: 'master' });
+        }
+    } catch (e) {
+        console.warn('[AI Utils] Could not check subscription:', e.message);
     }
 
     // Tier 2: User Personal Keys
-    const userKeys = await aiDB.getUserAIKeys(userId);
-    userKeys.forEach(k => keysToTry.push(k.api_key));
+    try {
+        const userKeys = await aiDB.getUserAIKeys(userId);
+        userKeys.forEach(k => keysToTry.push({ key: k.api_key, source: 'personal' }));
+    } catch (e) {
+        console.warn('[AI Utils] Could not fetch user keys:', e.message);
+    }
 
-    // Tier 3: Global Pool (Only if Tier 1&2 fail or are empty)
-    // We add them at the end
-    const globalPool = [...GLOBAL_KEYS];
-    // Rotate the global pool so we don't always try the first one
-    const rotatedPool = [
-        ...globalPool.slice(globalIndex),
-        ...globalPool.slice(0, globalIndex)
-    ];
-    
-    const finalKeySet = [...new Set([...keysToTry, ...rotatedPool])];
+    // Tier 3: Global Pool - rotated starting from globalIndex
+    for (let i = 0; i < globalPool.length; i++) {
+        const idx = (globalIndex + i) % globalPool.length;
+        keysToTry.push({ key: globalPool[idx], source: 'global' });
+    }
 
-    if (finalKeySet.length === 0) {
+    // Deduplicate by key value, keeping first occurrence (highest priority)
+    const seen = new Set();
+    const finalKeyList = keysToTry.filter(entry => {
+        if (seen.has(entry.key)) return false;
+        seen.add(entry.key);
+        return true;
+    });
+
+    if (finalKeyList.length === 0) {
         throw new Error("Tidak ada API Key yang tersedia. Silakan masukkan API Key di profil Anda.");
     }
 
+    console.log(`[AI Utils] Starting rotation with ${finalKeyList.length} keys (globalIndex: ${globalIndex})`);
+
     let lastError = null;
-    for (let i = 0; i < finalKeySet.length; i++) {
-        const apiKey = finalKeySet[i];
-        if (failedKeys.has(apiKey) && i < keysToTry.length) continue; // Skip failed personal keys
+    let attemptCount = 0;
+
+    for (const entry of finalKeyList) {
+        // Skip keys currently in cooldown
+        if (isKeyFailed(entry.key)) {
+            console.log(`[AI Utils] ⏭ Skipping ${entry.source} key ...${entry.key.slice(-6)} (in cooldown)`);
+            continue;
+        }
+
+        attemptCount++;
+        const keyLabel = `${entry.source}:...${entry.key.slice(-6)}`;
 
         try {
-            const genAI = new GoogleGenerativeAI(apiKey);
+            console.log(`[AI Utils] 🔑 Trying key ${keyLabel} (attempt ${attemptCount})`);
+            
+            const genAI = new GoogleGenerativeAI(entry.key);
             const model = genAI.getGenerativeModel({ 
-                model: options.model || "gemini-1.5-flash",
+                model: options.model || "gemini-flash-latest",
                 generationConfig: { 
                     responseMimeType: options.isJson ? "application/json" : "text/plain" 
                 }
@@ -84,39 +131,68 @@ async function callGeminiWithRotation(userId, prompt, options = {}) {
             const response = await result.response;
             const text = response.text();
 
-            // Success! 
-            if (globalPool.includes(apiKey)) {
-                // Update global index for next time to distribute load
-                globalIndex = (GLOBAL_KEYS.indexOf(apiKey) + 1) % GLOBAL_KEYS.length;
+            // Success! Advance global index for next call
+            if (entry.source === 'global') {
+                const keyIdx = globalPool.indexOf(entry.key);
+                if (keyIdx !== -1) {
+                    globalIndex = (keyIdx + 1) % globalPool.length;
+                }
             }
 
+            console.log(`[AI Utils] ✅ Success with key ${keyLabel}`);
             return options.isJson ? JSON.parse(text) : text;
 
         } catch (error) {
             lastError = error;
             const msg = error.message?.toLowerCase() || "";
-            const isQuota = msg.includes("quota") || msg.includes("exhausted") || error.status === 429;
+            const isQuota = msg.includes("quota") || msg.includes("exhausted") || msg.includes("429") || msg.includes("too many");
+            const isInvalidKey = msg.includes("api_key_invalid") || msg.includes("forbidden") || msg.includes("401");
             
-            console.warn(`[AI Utils] Key check failed (Attempt ${i+1}/${finalKeySet.length}):`, error.message);
+            console.warn(`[AI Utils] ❌ Key ${keyLabel} failed: ${isQuota ? 'QUOTA' : isInvalidKey ? 'INVALID' : 'OTHER'} - ${error.message?.substring(0, 100)}`);
+
+            if (isQuota && (options.model || "gemini-1.5-flash") === "gemini-1.5-flash") {
+                console.warn(`[AI Utils] 🔄 Fallback failed or quota hit. Skipping key ${keyLabel}...`);
+            } else if (isQuota) {
+                console.warn(`[AI Utils] 🔄 Fallback to gemini-1.5-flash for key ${keyLabel}...`);
+                try {
+                    const fallbackAI = new GoogleGenerativeAI(entry.key);
+                    const fallbackModel = fallbackAI.getGenerativeModel({ 
+                        model: "gemini-flash-latest",
+                        generationConfig: { 
+                            responseMimeType: options.isJson ? "application/json" : "text/plain" 
+                        }
+                    });
+                    const fallbackResult = await fallbackModel.generateContent({ contents });
+                    const fbResponse = await fallbackResult.response;
+                    const fbText = fbResponse.text();
+                    console.log(`[AI Utils] ✅ Success with fallback model on ${keyLabel}`);
+                    return options.isJson ? JSON.parse(fbText) : fbText;
+                } catch (fbError) {
+                    console.warn(`[AI Utils] ❌ Fallback also failed for ${keyLabel}:`, fbError.message);
+                }
+            }
 
             if (isQuota) {
-                // If it's a global key, maybe mark it as failed for a while
-                if (globalPool.includes(apiKey)) {
-                    failedKeys.add(apiKey);
-                    setTimeout(() => failedKeys.delete(apiKey), 1000 * 60 * 5); // 5 min cooldown
+                markKeyFailed(entry.key, 5 * 60 * 1000); // 5 min cooldown
+                // Advance global index past this failed key immediately
+                if (entry.source === 'global') {
+                    const keyIdx = globalPool.indexOf(entry.key);
+                    if (keyIdx !== -1) {
+                        globalIndex = (keyIdx + 1) % globalPool.length;
+                    }
                 }
                 continue; // Try next key
+            } else if (isInvalidKey) {
+                markKeyFailed(entry.key, 60 * 60 * 1000); // 1 hour cooldown for invalid keys
+                continue;
             } else {
-                // For non-quota errors (invalid key, forbidden), don't retry with THIS key again
-                if (i < keysToTry.length) {
-                    // It's a user/master key that's invalid - stop trying it
-                    console.error("[AI Utils] Critical key error:", error.message);
-                }
+                // Unknown error - still try next key
                 continue;
             }
         }
     }
 
+    console.error(`[AI Utils] 🚨 ALL ${attemptCount} keys exhausted. Total pool: ${finalKeyList.length}, Failed/cooldown: ${failedKeys.size}`);
     throw lastError || new Error("Semua API Key gagal memproses permintaan.");
 }
 

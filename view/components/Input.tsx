@@ -32,7 +32,7 @@ export const Input: React.FC<InputProps> = ({ label, error, icon, leftAddon, rig
                 ${icon ? 'pl-10' : ''}
                 ${rightElement ? 'pr-12' : ''}
                 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500
-                placeholder-stone-400 dark:placeholder-stone-600 
+                placeholder-stone-300 dark:placeholder-stone-600 
                 transition-all duration-300
                 ${error ? 'border-red-500 focus:border-red-500' : ''}
                 ${className}

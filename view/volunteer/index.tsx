@@ -26,6 +26,7 @@ interface VolunteerIndexProps {
   globalUsers?: UserData[];
   inventory?: FoodItem[];
   notifications?: any[]; // New Prop
+  socialSystem?: any;
 }
 
 export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({ 
@@ -39,7 +40,8 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
     onRefresh,
     globalUsers = [],
     inventory = [],
-    notifications = []
+    notifications = [],
+    socialSystem
 }) => {
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   
@@ -62,6 +64,9 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
   
   // NEW: Track locally completed tasks to lock buttons immediately
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string | number>>(new Set());
+
+  const [leaderboardMode, setLeaderboardMode] = useState<'live' | 'history'>('live');
+  const [historicalLeaderboard, setHistoricalLeaderboard] = useState<any[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -207,6 +212,7 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
     if (verificationResult.status === 'success') {
         // Trigger confetti celebration!
         // We use dynamic import for canvas-confetti via ESM
+        // @ts-ignore
         import('https://esm.sh/canvas-confetti').then(confetti => {
             confetti.default({
                 particleCount: 150,
@@ -229,6 +235,21 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
         stopCamera();
     }
   }, [showScanner, scannerMode]);
+
+  useEffect(() => {
+    if (leaderboardMode === 'history' && historicalLeaderboard.length === 0) {
+        const fetchHistory = async () => {
+            try {
+                // @ts-ignore
+                const data = await db.getLeaderboardHistory('WEEKLY');
+                setHistoricalLeaderboard(data || []);
+            } catch (e) {
+                console.error("Failed to fetch history", e);
+            }
+        };
+        fetchHistory();
+    }
+ }, [leaderboardMode, historicalLeaderboard.length]);
 
   // --- MAP GLOBAL CLAIMS TO TASKS WITH ADDRESS LOOKUP ---
   const mapClaimToTask = (claim: ClaimHistoryItem): VolunteerTask => {
@@ -368,13 +389,13 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
           }
       });
 
-      const volunteerSystem = SOCIAL_SYSTEM.volunteer;
+      const volunteerSystem = socialSystem?.volunteer || SOCIAL_SYSTEM.volunteer;
       const currentRankObj = volunteerSystem.tiers.slice().reverse().find(t => totalPoints >= t.minPoints) || volunteerSystem.tiers[0];
       const nextRankObj = volunteerSystem.tiers.find(t => t.minPoints > totalPoints);
       const progressToNext = nextRankObj ? Math.min(((totalPoints - currentRankObj.minPoints) / (nextRankObj.minPoints - currentRankObj.minPoints)) * 100, 100) : 100;
 
-      return { points: totalPoints, missionsCompleted, totalDistance, hoursContributed: missionsCompleted, currentRank: currentRankObj.name, nextRank: nextRankObj?.name || "Max", progressToNext, weeklyActivity };
-  }, [myCompletedTasks, currentUser]);
+      return { points: totalPoints, missionsCompleted, totalDistance, hoursContributed: missionsCompleted, currentRank: currentRankObj.name, nextRank: nextRankObj?.name || "Max", progressToNext, weeklyActivity, volunteerSystem };
+  }, [myCompletedTasks, currentUser, socialSystem]);
 
   const handleStartScan = (taskId: string | number) => {
       setScanningForTaskId(taskId);
@@ -471,25 +492,7 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
           </div>
        </div>
 
-  const [leaderboardMode, setLeaderboardMode] = useState<'live' | 'history'>('live');
-  const [historicalLeaderboard, setHistoricalLeaderboard] = useState<any[]>([]);
-
-  useEffect(() => {
-     if (leaderboardMode === 'history' && historicalLeaderboard.length === 0) {
-         const fetchHistory = async () => {
-             try {
-                 const data = await db.getLeaderboardHistory('WEEKLY');
-                 setHistoricalLeaderboard(data);
-             } catch (e) {
-                 console.error("Failed to fetch history", e);
-             }
-         };
-         fetchHistory();
-     }
-  }, [leaderboardMode]);
-
-  return (
-    <div className={`flex-1 p-4 md:p-8 max-w-3xl mx-auto w-full pb-32 transition-opacity duration-300 ${isRefreshing ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+       <div className={`flex-1 p-4 md:p-8 max-w-3xl mx-auto w-full pb-32 transition-opacity duration-300 ${isRefreshing ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
             {(activeTab === 'available' || activeTab === 'active') && (
                 <MissionList 
                     tasks={activeTab === 'available' ? availableTasks : myActiveTasks} 
@@ -504,7 +507,7 @@ export const VolunteerIndex: React.FC<VolunteerIndexProps> = ({
 
             {activeTab === 'history' && (
                 <div className="space-y-10">
-                    <StatsDashboard stats={stats} />
+                    <StatsDashboard stats={stats} socialSystem={socialSystem} />
                     
                     <section className="space-y-6">
                         <div className="flex items-center gap-3">

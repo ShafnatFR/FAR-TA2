@@ -1,14 +1,29 @@
 
 import React from 'react';
-import { ShieldAlert, MessageCircle, LogOut, Lock } from 'lucide-react';
+import { ShieldAlert, MessageCircle, LogOut, Lock, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '../components/Button';
 
 interface VerificationPendingModalProps {
   onLogout: () => void;
+  onRefresh: () => void;
   userName?: string;
 }
 
-export const VerificationPendingModal: React.FC<VerificationPendingModalProps> = ({ onLogout, userName }) => {
+export const VerificationPendingModal: React.FC<VerificationPendingModalProps> = ({ onLogout, onRefresh, userName }) => {
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [showStatusAlert, setShowStatusAlert] = React.useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    onRefresh();
+    
+    // Give it some time to fetch and then show alert if still pending
+    setTimeout(() => {
+        setIsRefreshing(false);
+        setShowStatusAlert(true);
+    }, 2000);
+  };
+
   const handleContactAdmin = () => {
     const adminNumber = "6285215376975"; // Nomor Super Admin
     const message = `Halo Admin Food AI Rescue,\n\nSaya pengguna baru dengan nama *${userName || 'User'}*.\nStatus akun saya masih *Pending*.\n\nMohon bantuannya untuk verifikasi akun saya agar bisa mulai berkontribusi. Terima kasih.`;
@@ -44,21 +59,38 @@ export const VerificationPendingModal: React.FC<VerificationPendingModalProps> =
                     <p className="text-orange-200/80 text-xs font-medium leading-relaxed">
                         Halo <strong className="text-orange-500">{userName}</strong>, akun Anda sedang dalam antrean verifikasi Admin.
                     </p>
+                    {showStatusAlert && (
+                        <div className="mt-3 flex items-center gap-2 bg-red-500/10 border border-red-500/30 p-2 rounded-lg animate-in slide-in-from-top-2 duration-300">
+                            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                            <p className="text-[10px] font-bold text-red-500 text-left leading-tight">
+                                Akun belum aktif. Segera hubungi admin untuk verifikasi.
+                            </p>
+                        </div>
+                    )}
                     <p className="text-stone-500 text-[10px] mt-2 italic">
                         Semua fitur terkunci hingga akun diaktifkan.
                     </p>
                 </div>
 
-                <Button 
-                    onClick={handleContactAdmin}
-                    className="h-14 w-full rounded-2xl font-black uppercase tracking-widest bg-[#25D366] hover:bg-[#128C7E] text-white shadow-lg shadow-green-900/20 border-0 flex items-center justify-center gap-2 mb-4"
-                >
-                    <MessageCircle className="w-5 h-5 fill-current" /> Hubungi Admin
-                </Button>
+                <div className="flex gap-4 w-full">
+                    <button 
+                        onClick={handleRefresh}
+                        className="h-12 w-12 shrink-0 rounded-2xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/30 flex items-center justify-center transition-all active:scale-95 group"
+                        title="Perbarui Status"
+                    >
+                        <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+                    </button>
+                    <Button 
+                        onClick={handleContactAdmin}
+                        className="h-12 flex-1 rounded-2xl font-black uppercase tracking-widest bg-[#25D366] hover:bg-[#128C7E] text-white shadow-lg shadow-green-900/20 border-0 flex items-center justify-center gap-2"
+                    >
+                        <MessageCircle className="w-5 h-5 fill-current" /> Admin
+                    </Button>
+                </div>
 
                 <button 
                     onClick={onLogout}
-                    className="text-stone-500 hover:text-stone-300 text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-colors py-2"
+                    className="mt-6 text-stone-500 hover:text-stone-300 text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-colors py-2"
                 >
                     <LogOut className="w-4 h-4" /> Keluar Akun
                 </button>

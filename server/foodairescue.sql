@@ -621,6 +621,47 @@ CREATE TABLE `user_impact_stats` (
   CONSTRAINT `user_impact_stats_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+-- NEW TABLES FOR LOGS, TARGETS & PRIVATE AI KEYS
+-- --------------------------------------------------------
+
+CREATE TABLE `system_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `actor_id` int(11) DEFAULT 0,
+  `actor_name` varchar(255) DEFAULT 'System',
+  `action` varchar(255) NOT NULL,
+  `details` text DEFAULT NULL,
+  `severity` enum('info', 'warning', 'critical') DEFAULT 'info',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `admin_targets` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `metric_key` varchar(50) NOT NULL UNIQUE,
+  `target_value` decimal(12,2) NOT NULL,
+  `label` varchar(255),
+  `updated_at` timestamp DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `user_ai_keys` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `api_key` varchar(255) NOT NULL,
+  `label` varchar(255) DEFAULT 'My AI Key',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `user_ai_keys_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Initial data for targets
+INSERT INTO `admin_targets` (`metric_key`, `target_value`, `label`) VALUES 
+('waste_kg', 50000.00, 'Target Penyelamatan Pangan'),
+('co2_kg', 112500.00, 'Target Pengurangan CO2'),
+('beneficiaries', 1000.00, 'Target Jangkauan Penerima');
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

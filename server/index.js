@@ -1,16 +1,18 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const path = require('path');
+const bcrypt = require('bcryptjs');
 const db = require('./db');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
 const port = process.env.PORT || 5000;
 
 // Modular AI Services
 const { verifyFood } = require('./services/foodVerification');
-const { generatePackagingDesign } = require('./services/packagingDesign');
+const { generatePackagingDesign, generatePackagingImage } = require('./services/packagingDesign');
 const { writeCSRCopy } = require('./services/contentWriter');
 const { scanKitchen, generateRecipe } = require('./services/kitchenScanner');
 
@@ -34,7 +36,27 @@ app.post('/api', async (req, res) => {
             case 'LOGIN_USER': result = await loginUser(data); break;
             case 'GET_USERS': 
                 const users = await getAllData('users'); 
-                result = users.map(u => ({ ...u, joinDate: u.created_at || new Date().toISOString() })); 
+                result = users.map(u => {
+                    const revRole = Object.keys(ROLE_MAP).find(key => ROLE_MAP[key] === u.role);
+                    const userCopy = { ...u };
+                    delete userCopy.password;
+                    return { 
+                        ...userCopy, 
+                        role: revRole || u.role,
+                        status: u.status ? u.status.toLowerCase() : 'pending',
+                        joinDate: u.created_at || new Date().toISOString() 
+                    };
+                }); 
+                break;
+            case 'GET_USER':
+                const [userRows] = await db.query('SELECT * FROM users WHERE id = ?', [data.id]);
+                if (userRows.length === 0) throw new Error("User tidak ditemukan.");
+                const fetchedUser = userRows[0];
+                delete fetchedUser.password;
+                // Reverse map role
+                const revRole = Object.keys(ROLE_MAP).find(key => ROLE_MAP[key] === fetchedUser.role);
+                if (revRole) fetchedUser.role = revRole;
+                result = fetchedUser;
                 break;
             case 'UPSERT_USER': result = await upsertUser(data); break;
             
@@ -138,6 +160,37 @@ app.post('/api', async (req, res) => {
             case 'UPSERT_ADMIN': result = await upsertAdmin(data.admin, data.actor); break;
             case 'DELETE_ADMIN': result = await deleteAdmin(data.id, data.actor); break;
 
+            case 'GET_RANK_LEVELS':
+                const [levels] = await db.query('SELECT * FROM rank_levels ORDER BY role ASC, min_points ASC');
+                result = levels.map(l => ({
+                    ...l,
+                    benefits: l.benefits ? JSON.parse(l.benefits) : []
+                }));
+                break;
+            case 'UPSERT_RANK_LEVEL':
+                const { id: levelId, role: lRole, name: lName, min_points: lMin, benefits: lBen, color: lCol, icon: lIco } = data.level;
+                const benefitsJson = JSON.stringify(lBen || []);
+                if (levelId) {
+                    await db.query(
+                        'UPDATE rank_levels SET role = ?, name = ?, min_points = ?, benefits = ?, color = ?, icon = ? WHERE id = ?',
+                        [lRole, lName, lMin, benefitsJson, lCol, lIco, levelId]
+                    );
+                    result = { id: levelId, ...data.level, success: true };
+                } else {
+                    const [res] = await db.query(
+                        'INSERT INTO rank_levels (role, name, min_points, benefits, color, icon) VALUES (?, ?, ?, ?, ?, ?)',
+                        [lRole, lName, lMin, benefitsJson, lCol, lIco]
+                    );
+                    result = { id: res.insertId, ...data.level, success: true };
+                }
+                await logAction(data.actor?.id, data.actor?.name, 'Upsert Rank Level', `Simpan Level: ${lName} (${lRole})`);
+                break;
+            case 'DELETE_RANK_LEVEL':
+                await db.query('DELETE FROM rank_levels WHERE id = ?', [data.id]);
+                await logAction(data.actor?.id, data.actor?.name, 'Delete Rank Level', `Hapus Level ID: ${data.id}`, 'warning');
+                result = { success: true };
+                break;
+
             case 'UPLOAD_IMAGE': 
                 const { uploadToFileSystem } = require('./fileService');
                 const targetFolder = data.folderType || 'fotoProfil'; 
@@ -159,6 +212,9 @@ app.post('/api', async (req, res) => {
                 switch (data.type) {
                     case 'DESIGN_PACKAGING':
                         result = await generatePackagingDesign(data.payload, data.actorId);
+                        break;
+                    case 'GENERATE_PACKAGING_IMAGE':
+                        result = await generatePackagingImage(data.payload, data.actorId);
                         break;
                     case 'WRITE_CSR_COPY':
                         result = await writeCSRCopy(data.payload, data.actorId);
@@ -277,27 +333,56 @@ async function registerUser(data) {
         throw err;
     }
 
+    // Hash password before saving
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const [result] = await db.query(
         'INSERT INTO users (name, email, password, role, phone, avatar, points, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, email, password, mapRole(role), phone, avatar, 0, 'PENDING']
+        [name, email, hashedPassword, mapRole(role), phone, avatar, 0, 'PENDING']
     );
-    return { id: result.insertId, ...data, isNewUser: true, status: 'PENDING', points: 0 };
+    return { id: result.insertId, ...data, isNewUser: true, status: 'pending', points: 0, password: '[PROTECTED]' };
 }
 
 async function loginUser(data) {
     const { email, password } = data;
-    const [rows] = await db.query('SELECT * FROM users WHERE email = ? AND password = ?', [email, password]);
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    
     if (rows.length === 0) {
         const err = new Error('Email atau Password salah.');
         err.statusCode = 401;
         throw err;
     }
+
     const user = rows[0];
+    
+    // Compare hashed password
+    let isMatch = false;
+    try {
+        isMatch = await bcrypt.compare(password, user.password);
+    } catch (e) {
+        console.log(`[AUTH] Bcrypt compare failed for ${email}, likely plain text in DB.`);
+    }
+    
+    // SECURITY FALLBACK: Auto-migrate plain text passwords
+    if (!isMatch && password === user.password) {
+        console.log(`[AUTH] Plain text match found for ${email}. Auto-hashing...`);
+        const newHash = await bcrypt.hash(password, 10);
+        await db.query('UPDATE users SET password = ? WHERE id = ?', [newHash, user.id]);
+        isMatch = true;
+    }
+
+    if (!isMatch) {
+        const err = new Error('Email atau Password salah.');
+        err.statusCode = 401;
+        throw err;
+    }
+
     delete user.password;
     // Reverse map role if needed for frontend
     const reverseRole = Object.keys(ROLE_MAP).find(key => ROLE_MAP[key] === user.role);
     if (reverseRole) user.role = reverseRole;
     user.isNewUser = true; 
+    if (user.status) user.status = user.status.toLowerCase();
     return user;
 }
 
@@ -331,6 +416,12 @@ async function upsertUser(data) {
                     finalValue = String(value).replace(/\D/g, '');
                     newPhone = finalValue;
                 }
+                
+                // Hash password if it's being updated
+                if (key === 'password') {
+                    if (value === '[PROTECTED]') continue; // Don't update if it's the placeholder
+                    finalValue = await bcrypt.hash(value, 10);
+                }
 
                 updates.push(`${key} = ?`);
                 values.push(finalValue);
@@ -340,6 +431,21 @@ async function upsertUser(data) {
         if (updates.length > 0) {
             values.push(id);
             await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
+
+            // ACTIVITY LOGGING
+            const actorId = data.actor?.id || 0;
+            const actorName = data.actor?.name || 'Admin';
+            
+            if (fields.status) {
+                const statusUpper = fields.status.toUpperCase();
+                if (statusUpper === 'ACTIVE') {
+                    await logAction(actorId, actorName, 'Activate User', `ACC/Aktivasi Akun: ${newName || id}`);
+                } else if (statusUpper === 'SUSPENDED') {
+                    await logAction(actorId, actorName, 'Suspend User', `Tolak/Suspend Akun: ${newName || id}`, 'warning');
+                }
+            } else if (updates.length > 0) {
+                await logAction(actorId, actorName, 'Edit User', `Update Profil User: ${newName || id}`);
+            }
 
             if (fields.avatar && oldUser.avatar && fields.avatar !== oldUser.avatar) {
                 const { deleteFile } = require('./fileService');
@@ -1584,7 +1690,7 @@ async function getAdmins() {
 }
 
 async function getSystemLogs() {
-    const [rows] = await db.query('SELECT * FROM system_logs ORDER BY timestamp DESC LIMIT 100');
+    const [rows] = await db.query('SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 100');
     return rows;
 }
 
@@ -1598,9 +1704,9 @@ async function upsertAdmin(adminData, actor) {
         const updates = ['name = ?', 'email = ?', 'role = ?', 'status = ?', 'permissions = ?'];
         const values = [name, email, mappedRole, status.toUpperCase(), permsJson];
         
-        if (password) {
+        if (password && password !== '[PROTECTED]') {
             updates.push('password = ?');
-            values.push(password);
+            values.push(await bcrypt.hash(password, 10));
         }
         
         values.push(id);
@@ -1609,9 +1715,10 @@ async function upsertAdmin(adminData, actor) {
         return { ...adminData, id };
     } else {
         // Insert
+        const hashedPassword = await bcrypt.hash(password || 'admin123', 10);
         const [result] = await db.query(
             'INSERT INTO users (name, email, password, role, status, permissions, points) VALUES (?, ?, ?, ?, ?, ?, 0)',
-            [name, email, password, mappedRole, status.toUpperCase(), permsJson]
+            [name, email, hashedPassword, mappedRole, status.toUpperCase(), permsJson]
         );
         await logAction(actor?.id, actor?.name, 'Add Admin', `Tambah admin baru: ${name} (${role})`);
         return { ...adminData, id: result.insertId };

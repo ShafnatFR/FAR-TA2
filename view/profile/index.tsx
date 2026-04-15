@@ -44,6 +44,7 @@ interface ProfileIndexProps {
   allAddresses?: Address[];
   onUpdateUser?: (data: UserData) => void;
   onEditAvatar?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  socialSystem?: any;
 }
 
 const MenuButton = ({ icon: Icon, label, onClick, last }: any) => (
@@ -82,7 +83,8 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
     onRefresh,
     allAddresses = [],
     onUpdateUser,
-    onEditAvatar
+    onEditAvatar,
+    socialSystem
 }) => {
     const [currentView, setCurrentView] = useState<string>(initialView);
     const [userData, setUserData] = useState<UserData | null>(currentUser);
@@ -505,6 +507,7 @@ export const ProfileIndex: React.FC<ProfileIndexProps> = ({
                     onEditAvatar={onEditAvatar || (() => {})} 
                     stats={stats}
                     onUpdateUser={handleUpdateUser}
+                    socialSystem={socialSystem}
                 />
             )}
 

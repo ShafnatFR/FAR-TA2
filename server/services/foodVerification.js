@@ -41,7 +41,7 @@ async function verifyFood(data, userId) {
         }
     `;
 
-    return await callGeminiWithRotation(userId, prompt, { isJson: true });
+    return await callGeminiWithRotation(userId, prompt, { isJson: true, image: data.image });
 }
 
 module.exports = { verifyFood };
